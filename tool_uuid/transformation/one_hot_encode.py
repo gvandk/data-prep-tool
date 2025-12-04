@@ -1,5 +1,5 @@
 from .base_transformation import BaseTransformation
-from core.dataframe_wrapper import DataFrameWrapper
+from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 
@@ -10,6 +10,7 @@ class oneHotEncodeTransformation(BaseTransformation):
         self.column = None
         self.dummies = None
         self.values = None
+        self.child_uuids = []
 
     def apply(self, df_wrapper: DataFrameWrapper):
         self.col_uuid = df_wrapper.get_uuid_by_index(self.col_index)
@@ -24,6 +25,8 @@ class oneHotEncodeTransformation(BaseTransformation):
         parent_index = col_order.index(self.col_uuid)
 
         df_wrapper.add_child_columns(self.col_uuid, {col: self.dummies[col] for col in self.dummies.columns})
+        self.child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
+        
         df_wrapper.remove_column(self.col_uuid)
 
         new_order = (
@@ -49,12 +52,3 @@ class oneHotEncodeTransformation(BaseTransformation):
         df_wrapper.restore_parent(self.col_uuid, self.column, self.values)
         df_wrapper.reorder_columns(new_order)
         return df_wrapper
-
-    def to_script(self):
-        return (
-            f'df = pd.concat(['
-            f'df.drop(columns=["{self.column}"]), '
-            f'pd.get_dummies(pd.Categorical(df["{self.column}"], categories=list(pd.unique(df["{self.column}"]))), prefix="{self.column}")'
-            f'], axis=1)'
-        )
-

@@ -1,5 +1,5 @@
 import pandas as pd
-from core.dataframe_wrapper import DataFrameWrapper
+from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
 
 def load_csv(file_path: str):
     """Load CSV as pandas DataFrame and wrap it using the wrapper."""

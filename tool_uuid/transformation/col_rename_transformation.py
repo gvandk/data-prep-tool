@@ -1,5 +1,5 @@
 from .base_transformation import BaseTransformation
-from core.dataframe_wrapper import DataFrameWrapper
+from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
 
 class ColumnRenameTransformation(BaseTransformation):
 
@@ -17,6 +17,3 @@ class ColumnRenameTransformation(BaseTransformation):
     def undo(self, df_wrapper: DataFrameWrapper):
         df_wrapper.rename_column(self.col_uuid, self.old_name)
         return df_wrapper
-    
-    def to_script(self):
-        return f'df.rename(columns={{"{self.old_name}": "{self.new_name}"}}, inplace=True)'

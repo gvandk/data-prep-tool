@@ -1,4 +1,4 @@
-from core.col_uuid_manager import ColUUIDManager
+from .col_uuid_manager import ColUUIDManager
 from typing import List, Optional
 import pandas as pd
 
@@ -69,6 +69,18 @@ class DataFrameWrapper:
         self.df[parent_name] = parent_data
         self.df.drop(columns=self.uuid_manager.get_children_names(parent_uuid), inplace=True)
         self.uuid_manager.restore_parent(parent_uuid, parent_name)
+
+    def get_cell_value(self, uuid: str, row_index: int):
+        """Get the value of a cell given column UUID and row index."""
+        col_name = self.get_col_name_by_uuid(uuid)
+        if col_name and col_name in self.df.columns:
+            return self.df.at[row_index, col_name]    
+    
+    def set_cell_value(self, uuid: str, row_index: int, value):
+        """Set the value of a cell given column UUID and row index."""
+        col_name = self.get_col_name_by_uuid(uuid)
+        if col_name and col_name in self.df.columns:
+            self.df.at[row_index, col_name] = value
         
     def get_all_uuids(self) -> List[str]:
         """Get all UUIDs in order of DataFrame columns."""
