@@ -14,7 +14,7 @@ class ColumnOrder(QHBoxLayout):
         self.reorder_input.textChanged.connect(self.on_text_edited)
 
     def set_current_index(self, uuid: str, index: str):
-        self.index = uuid
+        self.uuid = uuid
         self.reorder_input.blockSignals(True)
         self.reorder_input.setText(index)
         self.reorder_input.blockSignals(False)

@@ -5,21 +5,16 @@ from typing import List, Dict, Optional, Any, Set
 class GraphNode:
     uuid: str
     current_name: str
-    operation: str  # 'LOAD', 'ONE_HOT', 'BINNING', etc.
+    operation: str
     parents: List[str] = field(default_factory=list)
     params: Dict[str, Any] = field(default_factory=dict)
     is_deleted: bool = False
-
-    # For topological sort state
-    _visited: bool = False
-    _processing: bool = False
 
 class DependencyGraph:
     def __init__(self):
         self.nodes: Dict[str, GraphNode] = {}
 
     def register_load(self, uuid: str, name: str, source: str = "data.csv"):
-        """Register a column that comes from the original file."""
         self.nodes[uuid] = GraphNode(
             uuid=uuid,
             current_name=name,
@@ -28,53 +23,67 @@ class DependencyGraph:
         )
 
     def register_rename(self, uuid: str, new_name: str):
-        """
-        Updates the name in place.
-        If A -> B -> C, the node just remembers it is currently C.
-        """
         if uuid in self.nodes:
             self.nodes[uuid].current_name = new_name
 
-    def register_one_hot(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], prefix: str):
-        """Register the children of a One-Hot operation."""
-        # Ensure we capture the parent's generic One-Hot parameters
-        for c_uuid, c_name in zip(child_uuids, child_names):
+    def register_one_hot(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], prefix: str, original_names: List[str] = None, true_label="True", false_label="False"):
+        for i, c_uuid in enumerate(child_uuids):
+            source = original_names[i] if original_names and i < len(original_names) else child_names[i]
+            
             self.nodes[c_uuid] = GraphNode(
                 uuid=c_uuid,
-                current_name=c_name,
+                current_name=child_names[i],
                 operation="ONE_HOT",
                 parents=[parent_uuid],
-                params={"prefix": prefix}
+                params={
+                    "prefix": prefix, 
+                    "source_name": source,
+                    "true_label": true_label,
+                    "false_label": false_label
+                }
             )
 
-    def register_transformation(self, new_uuid: str, new_name: str, parent_uuids: List[str], op_type: str, params: dict):
-        """Generic handler for future transformations (Binning, Math, etc)."""
-        self.nodes[new_uuid] = GraphNode(
-            uuid=new_uuid,
-            current_name=new_name,
-            operation=op_type,
-            parents=parent_uuids,
-            params=params
-        )
-    
+    def register_binning(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], strategy: str, n_bins: int, original_names: List[str] = None, cutoffs: List[float] = None, true_label="True", false_label="False"):
+        
+        self.mark_deleted(parent_uuid)
+        
+        for i, c_uuid in enumerate(child_uuids):
+            source = original_names[i] if original_names and i < len(original_names) else child_names[i]
+            
+            # Store pre-binning name for rename check
+            parent_node = self.nodes.get(parent_uuid)
+            pre_bin_name = parent_node.current_name if parent_node else ""
+
+            self.nodes[c_uuid] = GraphNode(
+                uuid=c_uuid,
+                current_name=child_names[i],
+                operation="BINNING",
+                parents=[parent_uuid],
+                params={
+                    "strategy": strategy, 
+                    "n_bins": n_bins,
+                    "source_name": source,
+                    "cutoffs": cutoffs,
+                    "pre_binning_name": pre_bin_name,
+                    "true_label": true_label,
+                    "false_label": false_label
+                }
+            )
+
     def register_cell_edit(self, uuid: str, row_index: int, new_value):
-        """Register a cell edit operation."""
         if uuid in self.nodes:
             if "manual_edits" not in self.nodes[uuid].params:
                 self.nodes[uuid].params["manual_edits"] = []
-
             self.nodes[uuid].params["manual_edits"].append({
                 "row": row_index,
                 "value": new_value
             })
 
     def mark_deleted(self, uuid: str):
-        """Soft delete."""
         if uuid in self.nodes:
             self.nodes[uuid].is_deleted = True
 
     def get_active_nodes(self) -> List[GraphNode]:
-        """Return columns that should be present in the final output."""
         return [n for n in self.nodes.values() if not n.is_deleted]
     
     def get_node(self, uuid: str) -> Optional[GraphNode]:

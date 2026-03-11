@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMenuBar, QLabel, QVBoxLayout, QLineEdit, QPushButton, QStackedLayout
 from .table_view import TableView
 from .layouts.column_options import ColumnPanel
@@ -60,6 +61,10 @@ class MainWindow(QMainWindow):
         self.edit_menu = self.menu_bar.addMenu("&Edit")
         self.action_undo = self.edit_menu.addAction("Undo")
         self.action_redo = self.edit_menu.addAction("Redo")
+        
+        # Shortcuts
+        self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
         
         self.set_panel("intro")
     

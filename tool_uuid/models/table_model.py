@@ -17,10 +17,10 @@ class DataFrameModel(QAbstractTableModel):
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
-        return 0 if self.df_wrapper is None else self.df_wrapper.df.shape[0]
+        return 0 if self.df_wrapper.df is None else self.df_wrapper.df.shape[0]
 
     def columnCount(self, parent=QModelIndex()):
-        return 0 if self.df_wrapper is None else self.df_wrapper.df.shape[1]
+        return 0 if self.df_wrapper.df is None else self.df_wrapper.df.shape[1]
     
     def flags(self, index):
         if not index.isValid():
@@ -37,7 +37,6 @@ class DataFrameModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             value = self.df_wrapper.df.iloc[index.row(), index.column()]
             if isinstance(value, float):
-                 # Keep high precision for editing, formatted for display
                 return str(value) if role == Qt.ItemDataRole.EditRole else f"{value:.4f}"
             return str(value)
         
@@ -58,15 +57,12 @@ class DataFrameModel(QAbstractTableModel):
             return QVariant()
         
         if role == Qt.ItemDataRole.UserRole and orientation == Qt.Orientation.Horizontal:
-            # Return UUID for the column
             return self.df_wrapper.get_uuid_by_index(section)
         
         elif role == Qt.ItemDataRole.DisplayRole:
             if orientation == Qt.Orientation.Horizontal:
-                #column name
                 return self.df_wrapper.df.columns[section]
             else:
-                #row number
                 return str(section + 1)
         
         return QVariant()
