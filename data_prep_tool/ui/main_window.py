@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMenuBar, QLabel, QVBoxLayout, QLineEdit, QPushButton, QStackedLayout
 from .table_view import TableView
 from .layouts.column_options import ColumnPanel
@@ -24,28 +25,28 @@ class MainWindow(QMainWindow):
 
         #Left panel with stacked layout
         self.left_panel = QWidget()
-        left_layout = QStackedLayout()
-        self.left_panel.setLayout(left_layout)
+        self.left_layout = QStackedLayout()
+        self.left_panel.setLayout(self.left_layout)
         
         #Intro panel
         self.intro = IntroPanel()
-        left_layout.addWidget(self.intro)
+        self.left_layout.addWidget(self.intro)
 
         #General info panel
         self.general_options = GeneralPanel()
-        left_layout.addWidget(self.general_options)
+        self.left_layout.addWidget(self.general_options)
         
         #Cell options panel
         self.cell_options = CellPanel()
-        left_layout.addWidget(self.cell_options)
+        self.left_layout.addWidget(self.cell_options)
 
         #Column options panel
-        self.column_options = ColumnPanel(self.table_view)
-        left_layout.addWidget(self.column_options)
+        self.column_options = ColumnPanel()
+        self.left_layout.addWidget(self.column_options)
 
         #Row options panel
         self.row_options = RowPanel()
-        left_layout.addWidget(self.row_options)
+        self.left_layout.addWidget(self.row_options)
         
         central_layout.addWidget(self.left_panel, stretch=1)
         central_layout.addWidget(self.table_view, stretch=3)
@@ -53,54 +54,29 @@ class MainWindow(QMainWindow):
         #Menu bar
         self.menu_bar = self.menuBar()
         self.file_menu = self.menu_bar.addMenu("&File")
-        self.open_action = self.file_menu.addAction("Open CSV")
-        self.exit_action = self.file_menu.addAction("Exit")
-        self.undo_action = self.file_menu.addAction("Undo")
-        self.redo_action = self.file_menu.addAction("Redo")
+        self.action_load = self.file_menu.addAction("Load CSV")
+        self.action_export = self.file_menu.addAction("Export CSV Script")
+        self.action_exit = self.file_menu.addAction("Exit")
+
+        self.edit_menu = self.menu_bar.addMenu("&Edit")
+        self.action_undo = self.edit_menu.addAction("Undo")
+        self.action_redo = self.edit_menu.addAction("Redo")
         
-        left_layout.setCurrentWidget(self.intro)
-
-        #Connections
-        self.table_view.clicked.connect(self.cell_clicked)
-        self.table_view.horizontalHeader().sectionClicked.connect(self.column_clicked)
-        self.table_view.verticalHeader().sectionClicked.connect(self.row_clicked)
-
-    def get_csv_file(self):
-        """Open file dialog and return selected CSV file path or None."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open CSV File", "", "CSV Files (*.csv)"
-        )
-        return file_path if file_path else None
+        # Shortcuts
+        self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        
+        self.set_panel("intro")
     
-    # def on_index_edited(self, new_text):
-    #     if type(self.index) == int:
-    #         self.table_view.model().setHeaderData(self.index, Qt.Orientation.Vertical, new_text)
-    #     else:
-    #         self.table_view.model().setHeaderData(self.index.column(), Qt.Orientation.Vertical, new_text)
-
-    def cell_clicked(self, index):
-        self.left_panel.layout().setCurrentWidget(self.cell_options)
-        self.index = index
-        column = self.table_view.model().headerData(index.column(), Qt.Orientation.Horizontal)
-        self.cell_options.column_rename.set_current_column(index.column(), column)
-
-    def column_clicked(self, index):
-        self.left_panel.layout().setCurrentWidget(self.column_options)
-        self.index = index
-
-        column = self.table_view.model().headerData(index, Qt.Orientation.Horizontal)   
-        self.column_options.column_rename.set_current_column(index, column)
-        
-        encoding = self.column_options.encoder_options.column_encoding_state.get(index, "None")
-        self.column_options.encoder_options.set_current_column(index, encoding)
-        
-
-    def row_clicked(self, index):
-        self.left_panel.layout().setCurrentWidget(self.row_options)
-        self.index = index
-        self.row_options.row_index.setText(f"Row Index: {index}")
-
-    def reset_to_general(self):
-        self.left_panel.layout().setCurrentWidget(self.general_options)
-        self.general_options.row_count_label.setText(self.general_options.row_count_label.text()+str(self.table_view.model().rowCount()))
-        self.general_options.column_count_label.setText(self.general_options.column_count_label.text()+str(self.table_view.model().columnCount()))
+    def set_panel(self, panel_name: str):
+        """Helper to switch panels by name."""
+        mapping = {
+            "intro": self.intro,
+            "general": self.general_options,
+            "cell": self.cell_options,
+            "column": self.column_options,
+            "row": self.row_options
+        }
+        widget = mapping.get(panel_name)
+        if widget:
+            self.left_layout.setCurrentWidget(widget)

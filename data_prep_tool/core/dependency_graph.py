@@ -1,0 +1,90 @@
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any, Set
+
+@dataclass
+class GraphNode:
+    uuid: str
+    current_name: str
+    operation: str
+    parents: List[str] = field(default_factory=list)
+    params: Dict[str, Any] = field(default_factory=dict)
+    is_deleted: bool = False
+
+class DependencyGraph:
+    def __init__(self):
+        self.nodes: Dict[str, GraphNode] = {}
+
+    def register_load(self, uuid: str, name: str, source: str = "data.csv"):
+        self.nodes[uuid] = GraphNode(
+            uuid=uuid,
+            current_name=name,
+            operation="LOAD",
+            params={"source_name": name, "source_path": source}
+        )
+
+    def register_rename(self, uuid: str, new_name: str):
+        if uuid in self.nodes:
+            self.nodes[uuid].current_name = new_name
+
+    def register_one_hot(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], prefix: str, original_names: List[str] = None, true_label="True", false_label="False"):
+        for i, c_uuid in enumerate(child_uuids):
+            source = original_names[i] if original_names and i < len(original_names) else child_names[i]
+            
+            self.nodes[c_uuid] = GraphNode(
+                uuid=c_uuid,
+                current_name=child_names[i],
+                operation="ONE_HOT",
+                parents=[parent_uuid],
+                params={
+                    "prefix": prefix, 
+                    "source_name": source,
+                    "true_label": true_label,
+                    "false_label": false_label
+                }
+            )
+
+    def register_binning(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], strategy: str, n_bins: int, original_names: List[str] = None, cutoffs: List[float] = None, true_label="True", false_label="False"):
+        
+        self.mark_deleted(parent_uuid)
+        
+        for i, c_uuid in enumerate(child_uuids):
+            source = original_names[i] if original_names and i < len(original_names) else child_names[i]
+            
+            # Store pre-binning name for rename check
+            parent_node = self.nodes.get(parent_uuid)
+            pre_bin_name = parent_node.current_name if parent_node else ""
+
+            self.nodes[c_uuid] = GraphNode(
+                uuid=c_uuid,
+                current_name=child_names[i],
+                operation="BINNING",
+                parents=[parent_uuid],
+                params={
+                    "strategy": strategy, 
+                    "n_bins": n_bins,
+                    "source_name": source,
+                    "cutoffs": cutoffs,
+                    "pre_binning_name": pre_bin_name,
+                    "true_label": true_label,
+                    "false_label": false_label
+                }
+            )
+
+    def register_cell_edit(self, uuid: str, row_index: int, new_value):
+        if uuid in self.nodes:
+            if "manual_edits" not in self.nodes[uuid].params:
+                self.nodes[uuid].params["manual_edits"] = []
+            self.nodes[uuid].params["manual_edits"].append({
+                "row": row_index,
+                "value": new_value
+            })
+
+    def mark_deleted(self, uuid: str):
+        if uuid in self.nodes:
+            self.nodes[uuid].is_deleted = True
+
+    def get_active_nodes(self) -> List[GraphNode]:
+        return [n for n in self.nodes.values() if not n.is_deleted]
+    
+    def get_node(self, uuid: str) -> Optional[GraphNode]:
+        return self.nodes.get(uuid)
