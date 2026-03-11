@@ -1,9 +1,10 @@
+from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
+
 class BaseTransformation:
-    def apply(self, data):
+    def apply(self, df_wrapper: DataFrameWrapper) -> DataFrameWrapper:
+        """Apply transformation to DataFrameWrapper."""
         raise NotImplementedError()
     
-    def to_script(self):
-        raise NotImplementedError()
-    
-    def undo(self):
+    def undo(self, df_wrapper: DataFrameWrapper) -> DataFrameWrapper:
+        """Undo transformation on DataFrameWrapper."""
         raise NotImplementedError()

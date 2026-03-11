@@ -2,26 +2,24 @@ from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMen
 from PyQt6.QtCore import pyqtSignal
 
 class ColumnRename(QHBoxLayout):
-    column_rename_request = pyqtSignal(int, str)
+    column_rename_request = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        
-        self.index = -1
-
+        self.uuid = None
         self.rename_input = QLineEdit()
         self.addWidget(QLabel("Column Name:"))
         self.addWidget(self.rename_input)
 
         self.rename_input.textChanged.connect(self.on_text_edited)
 
-    def set_current_column(self, index, name):
-        self.index = index
+    def set_current_column(self, uuid: str, name: str):
+        self.index = uuid
         self.rename_input.blockSignals(True)
         self.rename_input.setText(name)
         self.rename_input.blockSignals(False)
+        self.rename_input.setFocus()
 
     def on_text_edited(self, new_text):
-        if self.index != -1:
-            self.column_rename_request.emit(self.index, new_text)
+        if self.uuid:
+            self.column_rename_request.emit(self.uuid, new_text)
