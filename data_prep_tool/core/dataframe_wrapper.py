@@ -100,7 +100,10 @@ class DataFrameWrapper:
     def restore_parent(self, parent_uuid: str, parent_name: str, parent_data: pd.Series):
         """Restore parent column and remove children (for undo one-hot)."""
         self.df[parent_name] = parent_data
-        self.df.drop(columns=self.uuid_manager.get_children_names(parent_uuid), inplace=True)
+        child_names = self.uuid_manager.get_children_names(parent_uuid)
+        existing_child_names = [name for name in child_names if name in self.df.columns]
+        if existing_child_names:
+            self.df.drop(columns=existing_child_names, inplace=True)
         self.uuid_manager.restore_parent(parent_uuid, parent_name)
 
     def get_cell_value(self, uuid: str, row_index: int):
@@ -121,12 +124,21 @@ class DataFrameWrapper:
     
     def reorder_columns(self, uuid_order: List[str]):
         """Reorder DataFrame columns to match the given UUID order."""
-
         col_order = []
+        seen = set()
         for uuid in uuid_order:
             col_name = self.uuid_manager.get_name_by_uuid(uuid)
-            if col_name and col_name in self.df.columns:
+            if col_name and col_name in self.df.columns and col_name not in seen:
                 col_order.append(col_name)
+                seen.add(col_name)
+
+        # Preserve any existing columns not present in uuid_order.
+        # This prevents accidental column loss when uuid_order is stale/partial
+        # (e.g. history replay after one-hot/binning regeneration).
+        for col_name in self.df.columns:
+            if col_name not in seen:
+                col_order.append(col_name)
+                seen.add(col_name)
         
         self.df = self.df[col_order]
         

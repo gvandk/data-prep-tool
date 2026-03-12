@@ -11,6 +11,8 @@ class oneHotEncodeTransformation(BaseTransformation):
         self.values = None
         self.child_uuids = []
         self.created_names = []
+        self._post_apply_order = []
+        self._parent_insert_index = 0
         
         self.true_label = true_label
         self.false_label = false_label
@@ -32,6 +34,7 @@ class oneHotEncodeTransformation(BaseTransformation):
 
         col_order = df_wrapper.get_all_uuids()
         parent_index = col_order.index(self.col_uuid)
+        self._parent_insert_index = parent_index
 
         df_wrapper.add_child_columns(self.col_uuid, {col: self.dummies[col] for col in self.dummies.columns})
         self.child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
@@ -45,17 +48,38 @@ class oneHotEncodeTransformation(BaseTransformation):
         )
 
         df_wrapper.reorder_columns(new_order)
+        # Store the post-apply order so undo can reconstruct position accurately
+        self._post_apply_order = df_wrapper.get_all_uuids()
         return df_wrapper
 
     def undo(self, df_wrapper: DataFrameWrapper):
-        child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
         col_order = df_wrapper.get_all_uuids()
-        insert_index = next((i for i, x in enumerate(col_order) if x in child_uuids), None)
+        child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
+        if not child_uuids:
+            child_uuids = self.child_uuids or []
+        child_uuid_set = set(child_uuids)
 
+        # Find where children sit in current order (if they still exist)
+        visible_child_positions = [i for i, uuid in enumerate(col_order) if uuid in child_uuid_set]
+        insert_index = visible_child_positions[0] if visible_child_positions else None
+
+        if insert_index is None:
+            # Children not visible in current order (stale mapping/history replay edge case).
+            # Prefer stored post-apply position, then initial parent index.
+            stored_child_set = set(self.child_uuids or [])
+            stored_index = next(
+                (i for i, x in enumerate(self._post_apply_order) if x in stored_child_set),
+                None
+            )
+            insert_index = stored_index if stored_index is not None else self._parent_insert_index
+
+        # Build new order: remove all children, insert parent at insert_index
+        non_child_order = [u for u in col_order if u not in child_uuid_set]
+        insert_index = min(insert_index, len(non_child_order))
         new_order = (
-            col_order[:insert_index] +
+            non_child_order[:insert_index] +
             [self.col_uuid] +
-            col_order[insert_index + len(child_uuids):]
+            non_child_order[insert_index:]
         )
 
         df_wrapper.restore_parent(self.col_uuid, self.column, self.values)
