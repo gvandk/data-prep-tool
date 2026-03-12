@@ -3,15 +3,15 @@ from PyQt6.QtCore import Qt
 import pandas as pd
 import numpy as np
 
-from tool_uuid.models.table_model import DataFrameModel
-from tool_uuid.core.transformation_manager import TransformationManager
-from tool_uuid.core.script_generator import ScriptGenerator
-from tool_uuid.transformation.col_reorder_transformation import ColumnReorderTransformation
-from tool_uuid.core.data_loader import load_csv
+from data_prep_tool.models.table_model import DataFrameModel
+from data_prep_tool.core.transformation_manager import TransformationManager
+from data_prep_tool.core.script_generator import ScriptGenerator
+from data_prep_tool.transformation.col_reorder_transformation import ColumnReorderTransformation
+from data_prep_tool.core.data_loader import load_csv
 
 # Import transformation types
-from tool_uuid.transformation.binning_transformation import BinningTransformation
-from tool_uuid.transformation.one_hot_encode import oneHotEncodeTransformation
+from data_prep_tool.transformation.binning_transformation import BinningTransformation
+from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformation
 
 class MainController:
     def __init__(self, main_window, transformation_manager):

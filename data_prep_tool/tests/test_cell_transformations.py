@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-import numpy as np  # <--- IMPORT THIS
+import numpy as np
 from core.dataframe_wrapper import DataFrameWrapper
 from transformation.cell_edit_transformation import CellEditTransformation
 

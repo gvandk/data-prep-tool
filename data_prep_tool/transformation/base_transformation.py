@@ -1,4 +1,4 @@
-from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
 class BaseTransformation:
     def apply(self, df_wrapper: DataFrameWrapper) -> DataFrameWrapper:

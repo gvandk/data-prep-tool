@@ -1,6 +1,6 @@
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant, pyqtSignal
 
-from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
 
 class DataFrameModel(QAbstractTableModel):
@@ -27,8 +27,7 @@ class DataFrameModel(QAbstractTableModel):
             return Qt.ItemFlag.NoItemFlags
         
         return (Qt.ItemFlag.ItemIsEnabled | 
-                Qt.ItemFlag.ItemIsSelectable | 
-                Qt.ItemFlag.ItemIsEditable)
+                Qt.ItemFlag.ItemIsSelectable)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid() or self.df_wrapper.df is None:
@@ -41,16 +40,6 @@ class DataFrameModel(QAbstractTableModel):
             return str(value)
         
         return QVariant()
-    
-    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        if role == Qt.ItemDataRole.EditRole:
-            uuid = self.df_wrapper.get_uuid_by_index(index.column())
-            
-            self.cell_edit_request.emit(index.row(), uuid, value)
-
-            return True
-            
-        return False
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if self.df_wrapper is None:

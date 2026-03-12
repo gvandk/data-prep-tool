@@ -74,10 +74,14 @@ class DependencyGraph:
         if uuid in self.nodes:
             if "manual_edits" not in self.nodes[uuid].params:
                 self.nodes[uuid].params["manual_edits"] = []
-            self.nodes[uuid].params["manual_edits"].append({
-                "row": row_index,
-                "value": new_value
-            })
+            
+            edits = self.nodes[uuid].params["manual_edits"]
+            for edit in edits:
+                if edit["row"] == row_index:
+                    edit["value"] = new_value
+                    return
+            
+            edits.append({"row": row_index, "value": new_value})
 
     def mark_deleted(self, uuid: str):
         if uuid in self.nodes:

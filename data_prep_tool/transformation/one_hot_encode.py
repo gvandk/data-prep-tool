@@ -1,5 +1,5 @@
 from .base_transformation import BaseTransformation
-from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 class oneHotEncodeTransformation(BaseTransformation):

@@ -1,9 +1,15 @@
 from typing import List, Set
+
+from google_crc32c import value
 from .dependency_graph import DependencyGraph, GraphNode
 
 class ScriptGenerator:
     def __init__(self, graph: DependencyGraph):
         self.graph = graph
+
+    def _s(self, value) -> str:
+        """Helper to return a safely escaped Python string literal for any value."""
+        return repr(str(value))
 
     def generate_script(self, final_col_uuids: List[str] = None) -> str:
         if final_col_uuids:
@@ -63,7 +69,7 @@ class ScriptGenerator:
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
                     lines.append(f"# Rename {src} -> {node.current_name}")
-                    lines.append(f"df.rename(columns={{'{src}': '{node.current_name}'}}, inplace=True)")
+                    lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
             
             elif node.operation == "ONE_HOT":
                 parent_uuid = node.parents[0]
@@ -77,14 +83,14 @@ class ScriptGenerator:
                     f_val = node.params.get('false_label', 'False')
                     
                     lines.append(f"# One-Hot Encode: {parent_name}")
-                    lines.append(f"dummies = pd.get_dummies(pd.Categorical(df['{parent_name}'], categories=list(pd.unique(df['{parent_name}']))), prefix='{prefix}')")
-                    lines.append(f"dummies = dummies.replace({{True: '{t_val}', 1: '{t_val}', False: '{f_val}', 0: '{f_val}'}})")
+                    lines.append(f"dummies = pd.get_dummies(pd.Categorical(df[{self._s(parent_name)}], categories=list(pd.unique(df[{self._s(parent_name)}]))), prefix={self._s(prefix)})")
+                    lines.append(f"dummies = dummies.replace({{True: {self._s(t_val)}, 1: {self._s(t_val)}, False: {self._s(f_val)}, 0: {self._s(f_val)}}})")
                     lines.append(f"df = pd.concat([df, dummies], axis=1)")
                     processed_one_hot_parents.add(parent_uuid)
                 
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
-                    lines.append(f"df.rename(columns={{'{src}': '{node.current_name}'}}, inplace=True)")
+                    lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
             
             elif node.operation == "BINNING":
                 parent_uuid = node.parents[0]
@@ -95,7 +101,7 @@ class ScriptGenerator:
                     src = node.params.get('source_name')
                     p_src = parent_node.params.get('source_name')
                     if p_src and p_src != base_name:
-                         lines.append(f"df.rename(columns={{'{p_src}': '{base_name}'}}, inplace=True)")
+                        lines.append(f"df.rename(columns={{{self._s(p_src)}: {self._s(base_name)}}}, inplace=True)")
 
                     strategy = node.params.get("strategy")
                     n = node.params.get("n_bins")
@@ -106,36 +112,35 @@ class ScriptGenerator:
                     lines.append(f"# Binning & Binarization: {base_name} ({strategy})")
                     
                     if strategy == "Custom" and cutoffs:
-                        lines.append(f"bins = pd.cut(df['{base_name}'], bins={cutoffs})")
-                        lines.append(f"dummies = pd.get_dummies(bins, prefix='{base_name}')")
-                        lines.append(f"dummies = dummies.replace({{True: '{t_val}', 1: '{t_val}', False: '{f_val}', 0: '{f_val}'}})")
+                        lines.append(f"bins = pd.cut(df[{self._s(base_name)}], bins={cutoffs})")
+                        lines.append(f"dummies = pd.get_dummies(bins, prefix={self._s(base_name)})")
+                        lines.append(f"dummies = dummies.replace({{True: {self._s(t_val)}, 1: {self._s(t_val)}, False: {self._s(f_val)}, 0: {self._s(f_val)}}})")
                     elif strategy == "Intraordinal":
-                        lines.append(f"codes = pd.cut(df['{base_name}'], bins={n}, labels=False)")
+                        lines.append(f"codes = pd.cut(df[{self._s(base_name)}], bins={n}, labels=False)")
                         lines.append(f"dummies = pd.DataFrame(index=df.index)")
                         lines.append(f"for i in range({n}):")
-                        lines.append(f"    dummies[f'{{'{base_name}'}}_{{i}}+'] = np.where((codes >= i), '{t_val}', '{f_val}')")
+                        lines.append(f"    dummies[f'{{{self._s(base_name)}}}_{{i}}+'] = np.where((codes >= i), {self._s(t_val)}, {self._s(f_val)})")
                     else:
                         if strategy in ["Equal Width", "Equidistant"]:
-                            lines.append(f"bins = pd.cut(df['{base_name}'], bins={n})")
+                            lines.append(f"bins = pd.cut(df[{self._s(base_name)}], bins={n})")
                         elif strategy in ["Equal Frequency", "Equinominal"]:
-                            lines.append(f"bins = pd.qcut(df['{base_name}'], q={n}, duplicates='drop')")
+                            lines.append(f"bins = pd.qcut(df[{self._s(base_name)}], q={n}, duplicates='drop')")
                         else:
-                            lines.append(f"bins = pd.cut(df['{base_name}'], bins={n})")
-                        lines.append(f"dummies = pd.get_dummies(bins, prefix='{base_name}')")
-                        lines.append(f"dummies = dummies.replace({{True: '{t_val}', 1: '{t_val}', False: '{f_val}', 0: '{f_val}'}})")
+                            lines.append(f"bins = pd.cut(df[{self._s(base_name)}], bins={n})")
+                        lines.append(f"dummies = pd.get_dummies(bins, prefix={self._s(base_name)})")
+                        lines.append(f"dummies = dummies.replace({{True: {self._s(t_val)}, 1: {self._s(t_val)}, False: {self._s(f_val)}, 0: {self._s(f_val)}}})")
                     
                     lines.append(f"df = pd.concat([df, dummies], axis=1)")
-                    lines.append(f"df.drop(columns=['{base_name}'], inplace=True)")
+                    lines.append(f"df.drop(columns=[{self._s(base_name)}], inplace=True)")
                     processed_binning_parents.add(parent_uuid)
 
             if "manual_edits" in node.params:
                 curr_name = node.current_name
                 for edit in node.params["manual_edits"]:
-                    val_str = f"'{edit['value']}'" if isinstance(edit['value'], str) else str(edit['value'])
-                    lines.append(f"df.at[{edit['row']}, '{curr_name}'] = {val_str}")
+                    lines.append(f"df.at[{edit['row']}, {self._s(curr_name)}] = {self._s(edit['value'])}")
 
         final_cols = [n.current_name for n in active_nodes]
-        final_cols_str = ", ".join(f"'{col}'" for col in final_cols)
+        final_cols_str = ", ".join(self._s(col) for col in final_cols)
         
         lines.append("")
         lines.append(f"df = df[[{final_cols_str}]]")

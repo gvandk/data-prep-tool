@@ -2,7 +2,6 @@ import unittest
 import pandas as pd
 from unittest.mock import MagicMock, patch
 
-# Adjust imports to match your folder structure
 from core.dependency_graph import DependencyGraph
 from core.script_generator import ScriptGenerator
 from core.transformation_manager import TransformationManager

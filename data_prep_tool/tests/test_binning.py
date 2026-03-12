@@ -1,10 +1,10 @@
 import unittest
 import pandas as pd
 import numpy as np
-from tool_uuid.core.dataframe_wrapper import DataFrameWrapper
-from tool_uuid.core.transformation_manager import TransformationManager
-from tool_uuid.core.script_generator import ScriptGenerator
-from tool_uuid.transformation.binning_transformation import BinningTransformation
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.transformation_manager import TransformationManager
+from data_prep_tool.core.script_generator import ScriptGenerator
+from data_prep_tool.transformation.binning_transformation import BinningTransformation
 
 class TestBinningTransformation(unittest.TestCase):
     def setUp(self):
