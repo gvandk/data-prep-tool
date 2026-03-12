@@ -10,15 +10,16 @@ class ScriptGenerator:
         return repr(str(value))
 
     def generate_script(self, final_col_uuids: List[str] = None) -> str:
+        active_nodes = self.graph.get_active_nodes()
+
+        selected_final_nodes: List[GraphNode] = []
         if final_col_uuids:
-            active_nodes = []
             for uuid in final_col_uuids:
                 node = self.graph.get_node(uuid)
-                if node: active_nodes.append(node)
-        else:
-            active_nodes = self.graph.get_active_nodes()
+                if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD"):
+                    selected_final_nodes.append(node)
 
-        col_active_nodes = [n for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD")]
+        #col_active_nodes = [n for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD")]
 
         lines = [
             "import pandas as pd",
@@ -42,12 +43,12 @@ class ScriptGenerator:
             ""
         ]
 
-        if not col_active_nodes:
+        if not active_nodes:
             lines.append("df.to_csv(output_path, index=False)")
             return "\n".join(lines)
 
-        # Build sorted column steps via dependency trace
-        sorted_col_steps: List[GraphNode] = []
+        # Build sorted steps via dependency trace
+        sorted_steps: List[GraphNode] = []
         visited: Set[str] = set()
 
         def trace(uuid: str):
@@ -57,21 +58,32 @@ class ScriptGenerator:
             visited.add(uuid)
             for parent_uuid in node.parents:
                 trace(parent_uuid)
-            sorted_col_steps.append(node)
+            sorted_steps.append(node)
 
-        for node in col_active_nodes:
+        for node in active_nodes:
             trace(node.uuid)
 
         processed_binning_parents: Set[str] = set()
         processed_one_hot_parents: Set[str] = set()
 
-        # --- Emit column structure operations first (renames, encodes, adds) ---
-        for node in sorted_col_steps:
+        processed_delete_offset = 0
+
+        for node in sorted_steps:
+            print(node.operation, flush=True)
             if node.operation == "LOAD":
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
                     lines.append(f"# Rename {src} -> {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
+            
+            elif node.operation == "ROW_DELETE":
+                    adjusted = node.params.get('row_index') - processed_delete_offset
+                    lines.append(f"df = df.drop(index={adjusted}).reset_index(drop=True)")
+                    processed_delete_offset += 1
+
+            elif node.operation == "ROW_ADD":
+                default = node.params.get('default_value', '')
+                lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])]).reset_index(drop=True)")
 
             elif node.operation == "COL_ADD":
                 default = node.params.get('default_value', '')
@@ -134,60 +146,16 @@ class ScriptGenerator:
                     processed_binning_parents.add(parent_uuid)
 
         # --- Column selection ---
-        final_cols = [n.current_name for n in col_active_nodes]
+        if final_col_uuids:
+            final_cols = [n.current_name for n in selected_final_nodes]
+        else:
+            final_cols = [n.current_name for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD")]
         final_cols_str = ", ".join(self._s(col) for col in final_cols)
         lines.append("")
         lines.append(f"# Select and order final columns")
         lines.append(f"df = df[[{final_cols_str}]]")
         lines.append("df = df.reset_index(drop=True)")
         lines.append("")
-
-        # --- Replay history in order for row ops and cell edits ---
-        # Build a lookup: col_uuid -> current_name for active columns only
-        active_uuid_to_name = {n.uuid: n.current_name for n in col_active_nodes}
-
-        from ..transformation.col_rename_transformation import ColumnRenameTransformation
-        from ..transformation.one_hot_encode import oneHotEncodeTransformation
-        from ..transformation.binning_transformation import BinningTransformation
-        from ..transformation.cell_edit_transformation import CellEditTransformation
-        from ..transformation.row_delete_transformation import RowDeleteTransformation
-        from ..transformation.row_add_transformation import RowAddTransformation
-
-        delete_offset = 0
-        has_row_ops = False
-        cell_edits_by_col_row: dict = {}  # (col_uuid, row_index) -> (final_name, value)
-
-        for trans in self.history:
-            if isinstance(trans, CellEditTransformation):
-                col_uuid = trans.col_uuid
-                if col_uuid in active_uuid_to_name:
-                    key = (col_uuid, trans.row_index)
-                    cell_edits_by_col_row[key] = (active_uuid_to_name[col_uuid], trans.new_value)
-
-            elif isinstance(trans, RowDeleteTransformation):
-                has_row_ops = True
-            elif isinstance(trans, RowAddTransformation):
-                has_row_ops = True
-
-        # Emit cell edits (deduplicated to final value per cell)
-        if cell_edits_by_col_row:
-            lines.append("# Cell edits")
-            for (col_uuid, row_index), (col_name, value) in cell_edits_by_col_row.items():
-                lines.append(f"df.at[{row_index}, {self._s(col_name)}] = {repr(value)}")
-            lines.append("")
-
-        # Emit row ops in order
-        if has_row_ops:
-            lines.append("# Row operations")
-            for trans in self.history:
-                if isinstance(trans, RowDeleteTransformation):
-                    adjusted = trans.row_index - delete_offset
-                    lines.append(f"df = df.drop(index={adjusted}).reset_index(drop=True)")
-                    delete_offset += 1
-                elif isinstance(trans, RowAddTransformation):
-                    default = trans.default_value
-                    lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])]).reset_index(drop=True)")
-            lines.append("")
 
         lines.append("df.to_csv(output_path, index=False)")
         lines.append("print(f'Done. Saved to {output_path}')")
