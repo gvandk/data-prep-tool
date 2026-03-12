@@ -1,101 +1,101 @@
-"Gen""der","Year ''of ""Birth","C'i""t""y'"
-Did not define,2005,Prague
-Male,1984,Prague
-Male,1990,Tokyo
-Did not define,1973,Rome
-Female,1984,New York
-Male,1972,Barcelona
-Male,1990,Warsaw
-Male,1995,Prague
-Did not define,1987,Barcelona
-Male,1974,Prague
-Did not define,1983,New York
-Did not define,1990,Tokyo
-Did not define,1983,London
-Male,2001,Prague
-Did not define,1995,Tokyo
-Female,1999,London
-Male,1979,Rome
-Male,1986,Tokyo
-Male,1978,Stockholm
-Male,1985,Prague
-Male,2005,Sydney
-Did not define,2004,Los Angeles
-Did not define,1986,Madrid
-Male,1997,Warsaw
-Did not define,1995,Paris
-Male,1993,Barcelona
-Did not define,1984,Barcelona
-Did not define,1978,Los Angeles
-Did not define,2002,Prague
-Did not define,2001,Los Angeles
-Female,1975,Vienna
-Male,1973,Madrid
-Female,1977,Berlin
-Did not define,1979,Berlin
-Female,1980,Vienna
-Male,1997,Chicago
-Male,1974,Vienna
-Did not define,1994,Vienna
-Female,1994,Seoul
-Female,1999,London
-Female,2003,Berlin
-Male,1986,London
-Male,2005,Munich
-Female,1970,Rome
-Male,1977,Berlin
-Male,2004,Prague
-Female,1987,Madrid
-Male,1991,Madrid
-Female,1977,Warsaw
-Female,1988,Seoul
-Did not define,1997,Paris
-Female,1980,Vienna
-Male,1999,Toronto
-Did not define,1970,Sydney
-Female,1986,Seoul
-Did not define,2002,Prague
-Male,1981,Tokyo
-Female,2002,Seoul
-Male,1976,Warsaw
-Did not define,1989,Berlin
-Female,2002,London
-Did not define,1982,Warsaw
-Did not define,1979,New York
-Female,1993,Tokyo
-Did not define,1980,Prague
-Male,2004,Toronto
-Did not define,2003,Vienna
-Male,1970,Los Angeles
-Male,1990,Los Angeles
-Did not define,2001,Madrid
-Male,1971,Munich
-Female,1977,London
-Male,1993,Toronto
-Male,1989,Munich
-Male,1985,New York
-Female,1973,Munich
-Female,1985,Sydney
-Female,1975,Seoul
-Did not define,1975,Amsterdam
-Female,2001,Vienna
-Male,1974,Warsaw
-Female,2004,Los Angeles
-Female,1978,Paris
-Male,1978,Madrid
-Did not define,2000,Amsterdam
-Female,2005,Madrid
-Did not define,1980,London
-Did not define,1986,Barcelona
-Did not define,2003,Warsaw
-Male,1997,London
-Did not define,1983,Rome
-Did not define,2004,London
-Male,1982,London
-Did not define,1989,Barcelona
-Did not define,1995,Los Angeles
-Male,1993,Stockholm
-Male,1998,Stockholm
-Female,2003,Toronto
-Female,1998,London
-Female,1977,Stockholm
+Gender,City,new_column,Year of Birth
+Did not define,Prague,1,2005
+Male,Prague,1,1984
+Male,Tokyo,1,1990
+Did not define,Rome,1,1973
+Female,New York,1,1984
+Male,Barcelona,1,1972
+Male,Warsaw,1,1990
+Male,Prague,1,1995
+Did not define,Barcelona,1,1987
+Male,Prague,1,1974
+Did not define,New York,1,1983
+Did not define,Tokyo,1,1990
+Did not define,London,1,1983
+Male,Prague,1,2001
+Did not define,Tokyo,1,1995
+Female,London,1,1999
+Male,Rome,1,1979
+Male,Tokyo,1,1986
+Male,Stockholm,1,1978
+Male,Prague,1,1985
+Male,Sydney,1,2005
+Did not define,Los Angeles,1,2004
+Did not define,Madrid,1,1986
+Male,Warsaw,1,1997
+Did not define,Paris,1,1995
+Male,Barcelona,1,1993
+Did not define,Barcelona,1,1984
+Did not define,Los Angeles,1,1978
+Did not define,Prague,1,2002
+Did not define,Los Angeles,1,2001
+Female,Vienna,1,1975
+Male,Madrid,1,1973
+Female,Berlin,1,1977
+Did not define,Berlin,1,1979
+Female,Vienna,1,1980
+Male,Chicago,1,1997
+Male,Vienna,1,1974
+Did not define,Vienna,1,1994
+Female,Seoul,1,1994
+Female,London,1,1999
+Female,Berlin,1,2003
+Male,London,1,1986
+Male,Munich,1,2005
+Female,Rome,1,1970
+Male,Berlin,1,1977
+Male,Prague,1,2004
+Female,Madrid,1,1987
+Male,Madrid,1,1991
+Female,Warsaw,1,1977
+Female,Seoul,1,1988
+Did not define,Paris,1,1997
+Female,Vienna,1,1980
+Male,Toronto,1,1999
+Did not define,Sydney,1,1970
+Female,Seoul,1,1986
+Did not define,Prague,1,2002
+Male,Tokyo,1,1981
+Female,Seoul,1,2002
+Male,Warsaw,1,1976
+Did not define,Berlin,1,1989
+Female,London,1,2002
+Did not define,Warsaw,1,1982
+Did not define,New York,1,1979
+Female,Tokyo,1,1993
+Did not define,Prague,1,1980
+Male,Toronto,1,2004
+Did not define,Vienna,1,2003
+Male,Los Angeles,1,1970
+Male,Los Angeles,1,1990
+Did not define,Madrid,1,2001
+Male,Munich,1,1971
+Female,London,1,1977
+Male,Toronto,1,1993
+Male,Munich,1,1989
+Male,New York,1,1985
+Female,Munich,1,1973
+Female,Sydney,1,1985
+Female,Seoul,1,1975
+Did not define,Amsterdam,1,1975
+Female,Vienna,1,2001
+Male,Warsaw,1,1974
+Female,Los Angeles,1,2004
+Female,Paris,1,1978
+Male,Madrid,1,1978
+Did not define,Amsterdam,1,2000
+Female,Madrid,1,2005
+Did not define,London,1,1980
+Did not define,Barcelona,1,1986
+Did not define,Warsaw,1,2003
+Male,London,1,1997
+Did not define,Rome,1,1983
+Did not define,London,1,2004
+Male,London,1,1982
+Did not define,Barcelona,1,1989
+Did not define,Los Angeles,1,1995
+Male,Stockholm,1,1998
+Female,Toronto,1,2003
+Female,Stockholm,1,1
+,,,
+1,1,1,1

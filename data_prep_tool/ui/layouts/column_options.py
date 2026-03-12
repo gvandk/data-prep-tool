@@ -1,3 +1,5 @@
+import uuid
+
 from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QPushButton, 
                              QGroupBox)
 from PyQt6.QtCore import pyqtSignal, Qt
@@ -11,6 +13,7 @@ class ColumnPanel(QWidget):
     column_binning_request = pyqtSignal(str, str, int, list)
     child_rename_request = pyqtSignal(str, str)
     close_request = pyqtSignal()
+    delete_col_requested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -51,8 +54,12 @@ class ColumnPanel(QWidget):
         self.encoder_options = ColumnEncoding()
         layout.addWidget(self.encoder_options)
 
+        self.delete_btn = QPushButton("Delete Column")
+        layout.addWidget(self.delete_btn)
+
         layout.addStretch()
 
+        self.delete_btn.clicked.connect(self._on_delete)
         self.column_rename.column_rename_request.connect(self.column_rename_request.emit)
         self.encoder_options.column_encoding_request.connect(self.column_encoding_request.emit)
         self.encoder_options.child_rename_request.connect(self.child_rename_request.emit)
@@ -61,3 +68,10 @@ class ColumnPanel(QWidget):
     def set_stats(self, text):
         """Update the statistics label."""
         self.stats_label.setText(text)
+    
+    def set_current_uuid(self, uuid: str):
+        self._current_uuid = uuid
+
+    def _on_delete(self):
+        if self._current_uuid:
+            self.delete_col_requested.emit(self._current_uuid)

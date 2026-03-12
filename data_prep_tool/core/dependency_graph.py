@@ -83,6 +83,30 @@ class DependencyGraph:
             
             edits.append({"row": row_index, "value": new_value})
 
+    def register_row_delete(self, row_index: int):
+        self.nodes[f"row_delete_{len(self.nodes)}"] = GraphNode(
+            uuid=f"row_delete_{len(self.nodes)}",
+            current_name="",
+            operation="ROW_DELETE",
+            params={"row_index": row_index}
+        )
+
+    def register_row_add(self, default_value):
+        self.nodes[f"row_add_{len(self.nodes)}"] = GraphNode(
+            uuid=f"row_add_{len(self.nodes)}",
+            current_name="",
+            operation="ROW_ADD",
+            params={"default_value": default_value}
+        )
+
+    def register_col_add(self, col_uuid: str, col_name: str, default_value):
+        self.nodes[col_uuid] = GraphNode(
+            uuid=col_uuid,
+            current_name=col_name,
+            operation="COL_ADD",
+            params={"default_value": default_value, "source_name": col_name}
+        )
+
     def mark_deleted(self, uuid: str):
         if uuid in self.nodes:
             self.nodes[uuid].is_deleted = True

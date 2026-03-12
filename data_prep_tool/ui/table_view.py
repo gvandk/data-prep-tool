@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import QTableView, QAbstractItemView
 from PyQt6.QtCore import pyqtSignal, Qt
-
+from PyQt6.QtGui import QKeyEvent
 
 class TableView(QTableView):
     column_reorder_requested = pyqtSignal(list)
     header_double_clicked = pyqtSignal(int)
+    delete_pressed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -41,3 +42,9 @@ class TableView(QTableView):
         
         uuid = model.get_column_uuid(logicalIndex)
         self.header_double_clicked.emit(uuid)
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key.Key_Delete:
+            self.delete_pressed.emit()
+        else:
+            super().keyPressEvent(event)

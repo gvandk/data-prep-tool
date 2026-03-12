@@ -4,6 +4,10 @@ from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformat
 from data_prep_tool.transformation.col_reorder_transformation import ColumnReorderTransformation
 from data_prep_tool.transformation.cell_edit_transformation import CellEditTransformation
 from data_prep_tool.transformation.binning_transformation import BinningTransformation
+from data_prep_tool.transformation.row_delete_transformation import RowDeleteTransformation
+from data_prep_tool.transformation.row_add_transformation import RowAddTransformation
+from data_prep_tool.transformation.col_delete_transformation import ColDeleteTransformation
+from data_prep_tool.transformation.col_add_transformation import ColAddTransformation
 from .dependency_graph import DependencyGraph
 
 from typing import List, Tuple
@@ -83,6 +87,26 @@ class TransformationManager:
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
 
+    def add_row_delete(self, row_index: int):
+        self.history.append(RowDeleteTransformation(row_index))
+        self.df_wrapper = self.history[-1].apply(self.df_wrapper)
+        self.redo.clear()
+
+    def add_row_add(self, default_value):
+        self.history.append(RowAddTransformation(default_value))
+        self.df_wrapper = self.history[-1].apply(self.df_wrapper)
+        self.redo.clear()
+
+    def add_col_delete(self, col_uuid: str):
+        self.history.append(ColDeleteTransformation(col_uuid))
+        self.df_wrapper = self.history[-1].apply(self.df_wrapper)
+        self.redo.clear()
+
+    def add_col_add(self, col_name: str, default_value):
+        self.history.append(ColAddTransformation(col_name, default_value))
+        self.df_wrapper = self.history[-1].apply(self.df_wrapper)
+        self.redo.clear()
+
     def undo_transformation(self):
         if not self.history:
             QApplication.beep()
@@ -144,5 +168,21 @@ class TransformationManager:
 
                 elif isinstance(transformation, CellEditTransformation):
                     graph.register_cell_edit(transformation.col_uuid, transformation.row_index, transformation.new_value)
+                
+                elif isinstance(transformation, ColDeleteTransformation):
+                    graph.mark_deleted(transformation.col_uuid)
+
+                elif isinstance(transformation, ColAddTransformation):
+                    graph.register_col_add(
+                        transformation.col_uuid,
+                        transformation.col_name,
+                        transformation.default_value
+                    )
+
+                elif isinstance(transformation, RowDeleteTransformation):
+                    graph.register_row_delete(transformation.row_index)
+
+                elif isinstance(transformation, RowAddTransformation):
+                    graph.register_row_add(transformation.default_value)
                 
             return graph

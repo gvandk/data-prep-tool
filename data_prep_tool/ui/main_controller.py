@@ -32,8 +32,11 @@ class MainController:
         self.main_window.table_view.verticalHeader().sectionClicked.connect(self.on_row_clicked)
         self.main_window.table_view.clicked.connect(self.on_cell_clicked)
         self.main_window.table_view.column_reorder_requested.connect(self.on_column_reorder_drag)
+        self.main_window.table_view.delete_pressed.connect(self.on_delete_pressed)
 
         self.main_window.general_options.binary_values_changed.connect(self.on_binary_values_changed)
+        self.main_window.general_options.add_row_requested.connect(self.on_add_row)
+        self.main_window.general_options.add_col_requested.connect(self.on_add_col)
 
         col_panel = self.main_window.column_options
         col_panel.column_rename_request.connect(self.on_column_rename)
@@ -41,6 +44,7 @@ class MainController:
         col_panel.encoder_options.column_binning_request.connect(self.on_binning_change)
         col_panel.encoder_options.child_rename_request.connect(self.on_column_rename)
         col_panel.column_reorder.column_reorder_request.connect(self.on_manual_reorder)
+        col_panel.delete_col_requested.connect(self.on_delete_col)
         col_panel.close_request.connect(self.on_panel_close)
 
         cell_panel = self.main_window.cell_options
@@ -48,6 +52,7 @@ class MainController:
         cell_panel.column_rename.column_rename_request.connect(self.on_column_rename)
         cell_panel.close_request.connect(self.on_panel_close)
 
+        self.main_window.row_options.delete_row_requested.connect(self.on_delete_row)
         self.main_window.row_options.close_request.connect(self.on_panel_close)
 
         self.refresh_view()
@@ -78,7 +83,7 @@ class MainController:
     def export_script(self):
         try:
             graph = self.manager.build_dependency_graph()
-            generator = ScriptGenerator(graph)
+            generator = ScriptGenerator(graph, history=self.manager.history)
             visual_order = self.manager.df_wrapper.get_all_uuids()
             script = generator.generate_script(final_col_uuids=visual_order)
             
@@ -163,6 +168,8 @@ class MainController:
         else:
             encoder_widget.set_current_column(uuid, "None", min_val=data_min, max_val=data_max)
 
+        self.main_window.column_options.set_current_uuid(uuid)
+
     def on_binning_change(self, uuid, strategy, n_bins, cutoffs):
         if strategy == "Custom":
             if not cutoffs: return
@@ -213,8 +220,7 @@ class MainController:
 
     def on_row_clicked(self, logical_index):
         self.main_window.set_panel("row")
-        if hasattr(self.main_window.row_options, 'row_index'):
-            self.main_window.row_options.row_index.setText(f"Row Index: {logical_index}")
+        self.main_window.row_options.set_row(logical_index)
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
@@ -255,6 +261,38 @@ class MainController:
                 self._apply_reorder(current_uuids)
         except ValueError:
             pass
+
+    def on_add_row(self, default_value):
+        self.manager.add_row_add(default_value)
+        self.refresh_view()
+
+    def on_add_col(self, default_value):
+        col_name = self.main_window.general_options.new_col_name_input.text().strip()
+        if not col_name:
+            return
+        self.manager.add_col_add(col_name, default_value)
+        self.refresh_view()
+
+    def on_delete_row(self, row_index):
+        self.manager.add_row_delete(row_index)
+        self.main_window.set_panel("general")
+        self.refresh_view()
+
+    def on_delete_col(self, uuid):
+        self.manager.add_col_delete(uuid)
+        self.main_window.set_panel("general")
+        self.refresh_view()
+
+    def on_delete_pressed(self):
+        panel = self.main_window.left_layout.currentWidget()
+        if panel == self.main_window.column_options:
+            uuid = self.main_window.column_options._current_uuid
+            if uuid:
+                self.on_delete_col(uuid)
+        elif panel == self.main_window.row_options:
+            row = self.main_window.row_options._current_row
+            if row != -1:
+                self.on_delete_row(row)
 
     def _apply_reorder(self, new_order):
         transformation = ColumnReorderTransformation(new_order)

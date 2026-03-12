@@ -17,12 +17,23 @@ if not os.path.exists(source_path):
 # Load Data
 df = pd.read_csv(source_path)
 
-# Rename Gender -> G"ender
-df.rename(columns={'Gender': 'G"ender'}, inplace=True)
-df.at[0, 'G"ender'] = 'Did no"t def\'ine'
-df.at[1, 'G"ender'] = 'M"al\'easdasdsad'
+# Add column: new_column
+df['new_column'] = '1'
 
-df = df[['G"ender', 'Year of Birth', 'City']]
+# Select and order final columns
+df = df[['Gender', 'City', 'new_column', 'Year of Birth']]
+df = df.reset_index(drop=True)
+
+# Cell edits
+df.at[98, 'new_column'] = 'ba'
+df.at[98, 'Year of Birth'] = '15'
+df.at[99, 'Year of Birth'] = '1'
+
+# Row operations
+df = pd.concat([df, pd.DataFrame([{col: '' for col in df.columns}])]).reset_index(drop=True)
+df = pd.concat([df, pd.DataFrame([{col: '1' for col in df.columns}])]).reset_index(drop=True)
+df = df.drop(index=98).reset_index(drop=True)
+df = df.drop(index=95).reset_index(drop=True)
 
 df.to_csv(output_path, index=False)
 print(f'Done. Saved to {output_path}')
