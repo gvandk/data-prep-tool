@@ -1,10 +1,12 @@
-from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QLineEdit, QHBoxLayout, QPushButton
+from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QLineEdit, QHBoxLayout, QPushButton, QComboBox
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QIntValidator
 
 class GeneralPanel(QWidget):
     binary_values_changed = pyqtSignal(str, str)
     add_row_requested = pyqtSignal(str)
     add_col_requested = pyqtSignal(str)
+    view_settings_changed = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,6 +48,23 @@ class GeneralPanel(QWidget):
 
         layout.addSpacing(20)
 
+        self.view_config_label = QLabel("View:")
+        self.view_config_label.setFont(font)
+        layout.addWidget(self.view_config_label)
+
+        layout.addWidget(QLabel("Max Rows Shown:"))
+        self.max_rows_input = QLineEdit("1000")
+        self.max_rows_input.setValidator(QIntValidator(1, 1000000000, self))
+        layout.addWidget(self.max_rows_input)
+
+        layout.addWidget(QLabel("Float Decimal Places:"))
+        self.float_decimal_select = QComboBox()
+        self.float_decimal_select.addItems([str(i) for i in range(1, 11)])
+        self.float_decimal_select.setCurrentText("4")
+        layout.addWidget(self.float_decimal_select)
+
+        layout.addSpacing(20)
+
         self.add_config_label = QLabel("Add Row / Column:")
         self.add_config_label.setFont(font)
         layout.addWidget(self.add_config_label)
@@ -69,8 +88,17 @@ class GeneralPanel(QWidget):
 
         self.true_input.textChanged.connect(self.on_values_changed)
         self.false_input.textChanged.connect(self.on_values_changed)
+        self.max_rows_input.textChanged.connect(self.on_view_settings_changed)
+        self.float_decimal_select.currentTextChanged.connect(self.on_view_settings_changed)
         self.add_row_btn.clicked.connect(lambda: self.add_row_requested.emit(self.default_value_input.text()))
         self.add_col_btn.clicked.connect(lambda: self.add_col_requested.emit(self.default_value_input.text()))
 
     def on_values_changed(self):
         self.binary_values_changed.emit(self.true_input.text(), self.false_input.text())
+
+    def on_view_settings_changed(self):
+        max_rows_text = self.max_rows_input.text().strip()
+        if not max_rows_text:
+            return
+
+        self.view_settings_changed.emit(int(max_rows_text), int(self.float_decimal_select.currentText()))

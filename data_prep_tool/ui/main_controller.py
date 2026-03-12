@@ -36,6 +36,7 @@ class MainController:
         self.main_window.table_view.delete_pressed.connect(self.on_delete_pressed)
 
         self.main_window.general_options.binary_values_changed.connect(self.on_binary_values_changed)
+        self.main_window.general_options.view_settings_changed.connect(self.on_view_settings_changed)
         self.main_window.general_options.add_row_requested.connect(self.on_add_row)
         self.main_window.general_options.add_col_requested.connect(self.on_add_col)
 
@@ -58,6 +59,21 @@ class MainController:
 
         self.refresh_view()
 
+    def _set_type(self, input):
+        try:
+            return int(input)
+        except ValueError:
+            pass
+        try:
+            return float(input)
+        except ValueError:
+            pass
+        if input.lower() == "true" :
+            return True
+        elif input.lower() == "false":
+            return False
+        return input
+
     def on_panel_close(self):
         self.main_window.set_panel("general")
         self.main_window.table_view.clearSelection()
@@ -65,6 +81,10 @@ class MainController:
 
     def on_binary_values_changed(self, true_val, false_val):
         self.manager.update_binary_labels(true_val, false_val)
+        self.refresh_view()
+
+    def on_view_settings_changed(self, max_rows, decimal_places):
+        self.model.set_view_settings(max_rows, decimal_places)
         self.refresh_view()
 
     def open_csv(self):
@@ -247,7 +267,7 @@ class MainController:
 
     def on_cell_edit(self, uuid, new_value):
         if self._active_row_index != -1:
-            self.manager.add_cell_edit(self._active_row_index, uuid, new_value)
+            self.manager.add_cell_edit(self._active_row_index, uuid, self._set_type(new_value))
             self.refresh_view()
 
     def on_column_reorder_drag(self, new_uuid_order):
@@ -267,7 +287,7 @@ class MainController:
             pass
 
     def on_add_row(self, default_value):
-        self.manager.add_row_add(default_value)
+        self.manager.add_row_add(self._set_type(default_value))
         self.refresh_view()
 
     def on_add_col(self, default_value):
@@ -275,7 +295,7 @@ class MainController:
         if not col_name:
             return
         try:
-            self.manager.add_col_add(col_name, default_value)
+            self.manager.add_col_add(col_name, self._set_type(default_value))
             self.refresh_view()
         except ValueError as e:
             QMessageBox.warning(self.main_window, "Add Column Error", str(e))
@@ -333,7 +353,7 @@ class MainController:
 
     def refresh_view(self):
         self.model.update_wrapper(self.manager.df_wrapper)
-        row_count = self.model.rowCount()
+        row_count = 0 if self.manager.df_wrapper.df is None else self.manager.df_wrapper.df.shape[0]
         col_count = self.model.columnCount()
         self.main_window.general_options.row_count_label.setText(f"Number of rows: {row_count}")
         self.main_window.general_options.column_count_label.setText(f"Number of columns: {col_count}")

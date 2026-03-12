@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant, pyqtSignal
+import numpy as np
 
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
@@ -10,6 +11,14 @@ class DataFrameModel(QAbstractTableModel):
     def __init__(self, df_wrapper: DataFrameWrapper = None):
         super().__init__()
         self.df_wrapper = df_wrapper
+        self.max_rows = 1000
+        self.float_precision = 2
+
+    def set_view_settings(self, max_rows: int, float_precision: int):
+        self.beginResetModel()
+        self.max_rows = max(1, int(max_rows))
+        self.float_precision = max(1, min(10, int(float_precision)))
+        self.endResetModel()
 
     def update_wrapper(self, new_df_wrapper: DataFrameWrapper):
         self.beginResetModel()
@@ -17,7 +26,10 @@ class DataFrameModel(QAbstractTableModel):
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
-        return 0 if self.df_wrapper.df is None else self.df_wrapper.df.shape[0]
+        if self.df_wrapper.df is None:
+            return 0
+
+        return min(self.df_wrapper.df.shape[0], self.max_rows)
 
     def columnCount(self, parent=QModelIndex()):
         return 0 if self.df_wrapper.df is None else self.df_wrapper.df.shape[1]
@@ -35,8 +47,10 @@ class DataFrameModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             value = self.df_wrapper.df.iloc[index.row(), index.column()]
-            if isinstance(value, float):
-                return str(value) if role == Qt.ItemDataRole.EditRole else f"{value:.4f}"
+            if isinstance(value, (float, np.floating)):
+                if role == Qt.ItemDataRole.EditRole:
+                    return str(value)
+                return f"{value:.{self.float_precision}f}"
             return str(value)
         
         return QVariant()
