@@ -34,9 +34,25 @@ class DataFrameWrapper:
             self.uuid_manager.rename_column(old_name, new_name)
 
     def add_columns(self, col_dict: dict):
-        """Add new column(s) to the DataFrame and UUID manager."""
+        """Add new column(s) to the DataFrame and UUID manager.
+        
+        Args:
+            col_dict: Dictionary of column names to column data
+            
+        Raises:
+            ValueError: If any column name already exists in the DataFrame
+        """
+        # Check if any column name already exists
+        existing_columns = [name for name in col_dict.keys() if name in self.df.columns]
+        if existing_columns:
+            raise ValueError(f"Column(s) {existing_columns} already exist. Cannot add columns with duplicate names.")
+        
         for col_name, col_data in col_dict.items():
-            self.df[col_name] = col_data
+            # Make a copy to ensure each column has independent data
+            if hasattr(col_data, 'copy'):
+                self.df[col_name] = col_data.copy()
+            else:
+                self.df[col_name] = col_data
         self.uuid_manager.add_columns(list(col_dict.keys()))
 
     def remove_column(self, uuid: str):
@@ -47,11 +63,28 @@ class DataFrameWrapper:
             self.uuid_manager.remove_column(uuid)
     
     def add_child_columns(self, parent_uuid: str, new_dict: dict):
-        """Add child columns to a parent column."""
+        """Add child columns to a parent column.
+        
+        Args:
+            parent_uuid: UUID of the parent column
+            new_dict: Dictionary of child column names to column data
+            
+        Raises:
+            ValueError: If any column name already exists in the DataFrame
+        """
         parent_name = self.get_col_name_by_uuid(parent_uuid)
         if parent_name:
+            # Check if any child column name already exists
+            existing_columns = [name for name in new_dict.keys() if name in self.df.columns]
+            if existing_columns:
+                raise ValueError(f"Column(s) {existing_columns} already exist. Cannot add child columns with duplicate names.")
+            
             for col_name, col_data in new_dict.items():
-                self.df[col_name] = col_data
+                # Make a copy to ensure each column has independent data
+                if hasattr(col_data, 'copy'):
+                    self.df[col_name] = col_data.copy()
+                else:
+                    self.df[col_name] = col_data
             self.uuid_manager.add_child_columns(parent_name, list(new_dict.keys()))
 
     def get_children_uuids(self, parent_uuid: str) -> Optional[List[str]]:

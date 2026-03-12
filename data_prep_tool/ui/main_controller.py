@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QHeaderView
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QHeaderView, QApplication
 from PyQt6.QtCore import Qt
 import pandas as pd
 import numpy as np
@@ -27,6 +27,7 @@ class MainController:
         self.main_window.action_export.triggered.connect(self.export_script)
         self.main_window.action_undo.triggered.connect(self.undo)
         self.main_window.action_redo.triggered.connect(self.redo)
+        self.main_window.action_delete.triggered.connect(self.on_delete_pressed)
 
         self.main_window.table_view.horizontalHeader().sectionClicked.connect(self.on_header_clicked)
         self.main_window.table_view.verticalHeader().sectionClicked.connect(self.on_row_clicked)
@@ -212,11 +213,14 @@ class MainController:
             all_uuids = self.manager.df_wrapper.get_all_uuids()
             if uuid in all_uuids:
                 col_index = all_uuids.index(uuid)
-                self.manager.add_onehot(col_index)
-                self.refresh_view()
-                children = self.manager.df_wrapper.get_children_uuids(uuid)
-                if children and children[0] in self.manager.df_wrapper.get_all_uuids():
-                    self.on_header_clicked(self.manager.df_wrapper.get_all_uuids().index(children[0]))
+                try:
+                    self.manager.add_onehot(col_index)
+                    self.refresh_view()
+                    children = self.manager.df_wrapper.get_children_uuids(uuid)
+                    if children and children[0] in self.manager.df_wrapper.get_all_uuids():
+                        self.on_header_clicked(self.manager.df_wrapper.get_all_uuids().index(children[0]))
+                except ValueError as e:
+                    QMessageBox.warning(self.main_window, "Encoding Error", str(e))
 
     def on_row_clicked(self, logical_index):
         self.main_window.set_panel("row")
@@ -270,8 +274,11 @@ class MainController:
         col_name = self.main_window.general_options.new_col_name_input.text().strip()
         if not col_name:
             return
-        self.manager.add_col_add(col_name, default_value)
-        self.refresh_view()
+        try:
+            self.manager.add_col_add(col_name, default_value)
+            self.refresh_view()
+        except ValueError as e:
+            QMessageBox.warning(self.main_window, "Add Column Error", str(e))
 
     def on_delete_row(self, row_index):
         self.manager.add_row_delete(row_index)
@@ -289,10 +296,16 @@ class MainController:
             uuid = self.main_window.column_options._current_uuid
             if uuid:
                 self.on_delete_col(uuid)
+            else:
+                QApplication.beep()
         elif panel == self.main_window.row_options:
             row = self.main_window.row_options._current_row
             if row != -1:
                 self.on_delete_row(row)
+            else:
+                QApplication.beep()
+        else:
+            QApplication.beep()
 
     def _apply_reorder(self, new_order):
         transformation = ColumnReorderTransformation(new_order)

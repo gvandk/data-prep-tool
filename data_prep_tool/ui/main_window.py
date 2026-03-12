@@ -1,6 +1,6 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeySequence
-from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMenuBar, QLabel, QVBoxLayout, QLineEdit, QPushButton, QStackedLayout
+from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMenuBar, QLabel, QVBoxLayout, QLineEdit, QPushButton, QStackedLayout, QScrollArea
 from .table_view import TableView
 from .layouts.column_options import ColumnPanel
 from .layouts.row_options import RowPanel
@@ -12,7 +12,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CSV Processor App")
-        self.resize(800, 600)
+        self.resize(1100, 700)
         
         #TableView to display CSV
         self.table_view = TableView()
@@ -27,6 +27,14 @@ class MainWindow(QMainWindow):
         self.left_panel = QWidget()
         self.left_layout = QStackedLayout()
         self.left_panel.setLayout(self.left_layout)
+
+        self.left_scroll_area = QScrollArea()
+        self.left_scroll_area.setWidgetResizable(True)
+        self.left_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.left_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.left_scroll_area.setMinimumWidth(360)
+        self.left_scroll_area.setMaximumWidth(420)
+        self.left_scroll_area.setWidget(self.left_panel)
         
         #Intro panel
         self.intro = IntroPanel()
@@ -48,7 +56,7 @@ class MainWindow(QMainWindow):
         self.row_options = RowPanel()
         self.left_layout.addWidget(self.row_options)
         
-        central_layout.addWidget(self.left_panel, stretch=1)
+        central_layout.addWidget(self.left_scroll_area, stretch=1)
         central_layout.addWidget(self.table_view, stretch=3)
 
         #Menu bar
@@ -61,10 +69,15 @@ class MainWindow(QMainWindow):
         self.edit_menu = self.menu_bar.addMenu("&Edit")
         self.action_undo = self.edit_menu.addAction("Undo")
         self.action_redo = self.edit_menu.addAction("Redo")
+        self.edit_menu.addSeparator()
+        self.action_delete = self.edit_menu.addAction("Delete")
         
         # Shortcuts
         self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
         self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.action_delete.setShortcut(QKeySequence.StandardKey.Delete)
+        self.action_delete.setStatusTip("Same as pressing the Delete key")
+        self.action_delete.setToolTip("Same as pressing the Delete key")
         
         self.set_panel("intro")
     

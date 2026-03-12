@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QComboBox, 
-                             QFrame, QSpinBox, QDoubleSpinBox, QPushButton, QMessageBox)
+                             QFrame, QSpinBox, QDoubleSpinBox, QPushButton, QMessageBox, QScrollArea)
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 import numpy as np
@@ -71,9 +71,18 @@ class ColumnEncoding(QWidget):
         self.parent_label.setFont(font)
         self.children_layout.addWidget(self.parent_label)
         self.children_layout.addWidget(QLabel("Generated Columns:"))
+
+        self.children_scroll_area = QScrollArea()
+        self.children_scroll_area.setWidgetResizable(True)
+        self.children_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.children_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.children_scroll_area.setMinimumHeight(140)
+        self.children_scroll_area.setMaximumHeight(260)
+        self.children_scroll_area.setWidget(self.children_container)
         
-        self.layout.addWidget(self.children_container)
+        self.layout.addWidget(self.children_scroll_area)
         self.children_container.setVisible(False)
+        self.children_scroll_area.setVisible(False)
 
         self.uuid = None
         self._edge_widgets = [] 
@@ -111,9 +120,11 @@ class ColumnEncoding(QWidget):
 
         if (is_onehot or is_binning) and child_columns:
             self.children_container.setVisible(True)
+            self.children_scroll_area.setVisible(True)
             self._populate_children(child_columns, parent_name)
         else:
             self.children_container.setVisible(False)
+            self.children_scroll_area.setVisible(False)
             self._clear_children()
 
         self.encoding_combo.blockSignals(False)
