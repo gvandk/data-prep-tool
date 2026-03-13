@@ -1,8 +1,8 @@
 import pandas as pd
 import sys
-from core.dataframe_wrapper import DataFrameWrapper
-from transformation.col_rename_transformation import ColumnRenameTransformation
-from transformation.one_hot_encode import oneHotEncodeTransformation
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.transformation.col_rename_transformation import ColumnRenameTransformation
+from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformation
 
 def test_onehot_basic_apply():
     print("Testing: One-Hot Encoding Basic Apply")

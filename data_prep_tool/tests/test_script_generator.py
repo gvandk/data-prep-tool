@@ -1,6 +1,6 @@
 import unittest
-from core.dependency_graph import DependencyGraph
-from core.script_generator import ScriptGenerator
+from data_prep_tool.core.dependency_graph import DependencyGraph
+from data_prep_tool.core.script_generator import ScriptGenerator
 
 class TestScriptGenerator(unittest.TestCase):
     def setUp(self):

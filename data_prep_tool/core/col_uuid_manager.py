@@ -74,7 +74,7 @@ class ColUUIDManager:
 
     def get_children_uuids(self, parent_uuid: str) -> List[str]:
         """Get list of child UUIDs for a given parent UUID."""
-        return self.children_map.get(parent_uuid, [])
+        return list(self.children_map.get(parent_uuid, []))
 
     def get_children_names(self, parent_uuid: str) -> List[str]:
         """Get list of child column names for a given parent UUID."""

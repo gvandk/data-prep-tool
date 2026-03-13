@@ -1,7 +1,7 @@
 import pandas as pd
 import sys
-from core.dataframe_wrapper import DataFrameWrapper
-from core.col_uuid_manager import ColUUIDManager
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.col_uuid_manager import ColUUIDManager
 
 def test_basic_initialization():
     print("Testing: Basic Initialization")
@@ -130,6 +130,45 @@ def test_add_columns():
     assert uuid_c is not None
     
     print("Add columns works\n")
+
+
+def test_add_columns_with_duplicate_name():
+    print("Testing: Add Columns with Duplicate Name (Should Fail)")
+    
+    df = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
+    wrapper = DataFrameWrapper(df)
+    
+    # Try to add a column with a name that already exists
+    try:
+        wrapper.add_columns({'B': [5, 6], 'C': [7, 8]})
+        assert False, "Expected ValueError when adding column with duplicate name"
+    except ValueError as e:
+        assert "already exist" in str(e)
+        # Verify that no changes were made
+        assert 'C' not in wrapper.df.columns
+        assert list(wrapper.df['B']) == [3, 4]  # Original data unchanged
+    
+    print("Add columns with duplicate name correctly throws error\n")
+
+
+def test_add_columns_independent_data():
+    print("Testing: Add Columns Have Independent Data")
+    
+    df = pd.DataFrame({'A': [1, 2, 3]})
+    wrapper = DataFrameWrapper(df)
+    
+    # Create shared data and add as multiple columns
+    shared_data = [10, 20, 30]
+    wrapper.add_columns({'B': shared_data, 'C': shared_data})
+    
+    # Modify one column
+    wrapper.df.loc[0, 'B'] = 100
+    
+    # Verify the other column wasn't affected
+    assert wrapper.df.loc[0, 'B'] == 100
+    assert wrapper.df.loc[0, 'C'] == 10  # Should be unchanged
+    
+    print("Columns have independent data\n")
 
 
 def test_remove_column():
@@ -291,7 +330,7 @@ def test_reorder_columns():
 
 
 def test_reorder_columns_partial():
-    print("Testing: Reorder Columns with Invalid UUIDs")
+    print("Testing: Reorder Columns with Invalid UUIDs (Preserve Missing)")
     
     df = pd.DataFrame({'A': [1], 'B': [2], 'C': [3]})
     wrapper = DataFrameWrapper(df)
@@ -302,10 +341,10 @@ def test_reorder_columns_partial():
     # Reorder with fake UUID in the middle (should skip it)
     wrapper.reorder_columns([uuid_c, 'fake-uuid', uuid_a])
     
-    # Should only have C and A (B is missing from reorder)
-    assert list(wrapper.df.columns) == ['C', 'A']
+    # Should preserve B at the end instead of dropping it
+    assert list(wrapper.df.columns) == ['C', 'A', 'B']
     
-    print("Reorder with invalid UUIDs handled\n")
+    print("Reorder with invalid UUIDs preserves unspecified columns\n")
 
 
 def test_one_hot_encoding_workflow():
@@ -424,6 +463,8 @@ def run_all_tests():
         test_get_col_data_by_uuid,
         test_rename_column,
         test_add_columns,
+        test_add_columns_with_duplicate_name,
+        test_add_columns_independent_data,
         test_remove_column,
         test_add_child_columns,
         test_get_parent_and_children,

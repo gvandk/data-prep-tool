@@ -1,5 +1,5 @@
 import unittest
-from core.dependency_graph import DependencyGraph
+from data_prep_tool.core.dependency_graph import DependencyGraph
 
 class TestDependencyGraph(unittest.TestCase):
     def setUp(self):

@@ -2,12 +2,12 @@ import unittest
 import pandas as pd
 from unittest.mock import MagicMock, patch
 
-from core.dependency_graph import DependencyGraph
-from core.script_generator import ScriptGenerator
-from core.transformation_manager import TransformationManager
-from core.dataframe_wrapper import DataFrameWrapper
-from transformation.col_rename_transformation import ColumnRenameTransformation
-from transformation.one_hot_encode import oneHotEncodeTransformation
+from data_prep_tool.core.dependency_graph import DependencyGraph
+from data_prep_tool.core.script_generator import ScriptGenerator
+from data_prep_tool.core.transformation_manager import TransformationManager
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.transformation.col_rename_transformation import ColumnRenameTransformation
+from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformation
 
 class TestDependencyGraph(unittest.TestCase):
     def setUp(self):

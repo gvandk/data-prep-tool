@@ -60,7 +60,7 @@ class GeneralPanel(QWidget):
         layout.addWidget(QLabel("Float Decimal Places:"))
         self.float_decimal_select = QComboBox()
         self.float_decimal_select.addItems([str(i) for i in range(1, 11)])
-        self.float_decimal_select.setCurrentText("4")
+        self.float_decimal_select.setCurrentText("2")
         layout.addWidget(self.float_decimal_select)
 
         layout.addSpacing(20)

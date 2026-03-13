@@ -38,8 +38,11 @@ class DataFrameModel(QAbstractTableModel):
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
         
-        return (Qt.ItemFlag.ItemIsEnabled | 
+        return (Qt.ItemFlag.ItemIsEnabled |
                 Qt.ItemFlag.ItemIsSelectable)
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        return False
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid() or self.df_wrapper.df is None:

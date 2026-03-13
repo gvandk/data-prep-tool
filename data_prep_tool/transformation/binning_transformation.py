@@ -26,42 +26,31 @@ class BinningTransformation(BaseTransformation):
         self.column = df_wrapper.get_col_name_by_uuid(self.col_uuid)
         self.values = df_wrapper.get_col_data_by_uuid(self.col_uuid).copy()
         
-        dummies = pd.DataFrame(index=self.values.index)
+        binned_col_name = f"{self.column}_binned"
 
         try:
-            # 1. Custom Binning
+            numeric_values = pd.to_numeric(self.values, errors='coerce')
+
             if self.strategy == "Custom":
-                if not self.cutoffs: raise ValueError("Cutoffs required")
-                binned = pd.cut(self.values, bins=self.cutoffs)
-                dummies = pd.get_dummies(binned, prefix=self.column)
-                # Apply labels via replace
-                dummies = dummies.replace({True: self.true_label, 1: self.true_label, 
-                                           False: self.false_label, 0: self.false_label})
+                if not self.cutoffs:
+                    raise ValueError("Cutoffs required")
+                binned = pd.cut(numeric_values, bins=self.cutoffs).astype(str)
 
-            # 2. Intraordinal (Cumulative)
             elif self.strategy == "Intraordinal":
-                codes = pd.cut(self.values, bins=self.n_bins, labels=False)
-                for i in range(self.n_bins):
-                    col_name = f"{self.column}_{i}+"
-                    # Direct assignment of custom labels
-                    dummies[col_name] = np.where((codes >= i), self.true_label, self.false_label)
-            
-            # 3. Standard Strategies
+                binned = pd.cut(numeric_values, bins=self.n_bins, labels=False)
+
+            elif self.strategy in ["Equal Width", "Equidistant"]:
+                binned = pd.cut(numeric_values, bins=self.n_bins).astype(str)
+
+            elif self.strategy in ["Equal Frequency", "Equinominal"]:
+                binned = pd.qcut(numeric_values, q=self.n_bins, duplicates='drop').astype(str)
+
             else:
-                if self.strategy in ["Equal Width", "Equidistant"]:
-                    binned = pd.cut(self.values, bins=self.n_bins)
-                elif self.strategy in ["Equal Frequency", "Equinominal"]:
-                    binned = pd.qcut(self.values, q=self.n_bins, duplicates='drop')
-                else:
-                    binned = pd.cut(self.values, bins=self.n_bins)
-                dummies = pd.get_dummies(binned, prefix=self.column)
-                # Apply labels via replace
-                dummies = dummies.replace({True: self.true_label, 1: self.true_label, 
-                                           False: self.false_label, 0: self.false_label})
+                binned = pd.cut(numeric_values, bins=self.n_bins).astype(str)
 
-            self.created_names = list(dummies.columns)
+            self.created_names = [binned_col_name]
 
-            df_wrapper.add_child_columns(self.col_uuid, {col: dummies[col] for col in dummies.columns})
+            df_wrapper.add_child_columns(self.col_uuid, {binned_col_name: binned})
             self.child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
             df_wrapper.remove_column(self.col_uuid)
 

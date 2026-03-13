@@ -1,8 +1,8 @@
 import unittest
 import pandas as pd
 import numpy as np
-from core.dataframe_wrapper import DataFrameWrapper
-from transformation.cell_edit_transformation import CellEditTransformation
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.transformation.cell_edit_transformation import CellEditTransformation
 
 class TestTransformations(unittest.TestCase):
     def setUp(self):

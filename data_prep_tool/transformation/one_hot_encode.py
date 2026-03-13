@@ -3,7 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 class oneHotEncodeTransformation(BaseTransformation):
-    def __init__(self, col_index: int, true_label: str = "True", false_label: str = "False"):
+    def __init__(self, col_index: int, true_label=1, false_label=0):
         self.col_index = col_index
         self.col_uuid = None
         self.column = None
@@ -51,6 +51,16 @@ class oneHotEncodeTransformation(BaseTransformation):
         # Store the post-apply order so undo can reconstruct position accurately
         self._post_apply_order = df_wrapper.get_all_uuids()
         return df_wrapper
+
+    def to_script(self) -> str:
+        col = self.column
+        lines = [
+            f"# One-Hot Encode: {col}",
+            f"_dummies = pd.get_dummies(pd.Categorical(df['{col}'], categories=list(pd.unique(df['{col}']))), prefix='{col}')",
+            f"df = pd.concat([df, _dummies], axis=1)",
+            f"df.drop(columns=['{col}'], inplace=True)",
+        ]
+        return "\n".join(lines)
 
     def undo(self, df_wrapper: DataFrameWrapper):
         col_order = df_wrapper.get_all_uuids()

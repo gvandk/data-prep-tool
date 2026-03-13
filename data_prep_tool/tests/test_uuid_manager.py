@@ -1,6 +1,6 @@
 import pandas as pd
 import sys
-from core.col_uuid_manager import ColUUIDManager
+from data_prep_tool.core.col_uuid_manager import ColUUIDManager
 
 def test_basic_initialization():
     print("Testing: Basic Initialization")

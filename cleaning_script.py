@@ -17,23 +17,20 @@ if not os.path.exists(source_path):
 # Load Data
 df = pd.read_csv(source_path)
 
+df = pd.concat([df, pd.DataFrame([{col: '' for col in df.columns}])]).reset_index(drop=True)
+df = df.drop(index=3).reset_index(drop=True)
+df = df.drop(index=2).reset_index(drop=True)
 # Add column: new_column
-df['new_column'] = '1'
+df['new_column'] = ''
+# Add column: new_column
+df['new_column'] = '12'
+# Add column: new_columns
+df['new_columns'] = '12'
+df = pd.concat([df, pd.DataFrame([{col: '12' for col in df.columns}])]).reset_index(drop=True)
 
 # Select and order final columns
-df = df[['Gender', 'City', 'new_column', 'Year of Birth']]
+df = df[['Year of Birth', 'City', 'new_column', 'new_columns']]
 df = df.reset_index(drop=True)
-
-# Cell edits
-df.at[98, 'new_column'] = 'ba'
-df.at[98, 'Year of Birth'] = '15'
-df.at[99, 'Year of Birth'] = '1'
-
-# Row operations
-df = pd.concat([df, pd.DataFrame([{col: '' for col in df.columns}])]).reset_index(drop=True)
-df = pd.concat([df, pd.DataFrame([{col: '1' for col in df.columns}])]).reset_index(drop=True)
-df = df.drop(index=98).reset_index(drop=True)
-df = df.drop(index=95).reset_index(drop=True)
 
 df.to_csv(output_path, index=False)
 print(f'Done. Saved to {output_path}')
