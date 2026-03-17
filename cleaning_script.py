@@ -1,36 +1,19 @@
 import pandas as pd
 import numpy as np
-import sys
-import os
-
-if len(sys.argv) != 3:
-    print('Usage: python cleaning_script.py <source_csv> <output_csv>')
-    sys.exit(1)
-
-source_path = sys.argv[1]
-output_path = sys.argv[2]
-
-if not os.path.exists(source_path):
-    print(f'Error: Source file {source_path} not found.')
-    sys.exit(1)
 
 # Load Data
-df = pd.read_csv(source_path)
+df = pd.read_csv('data.csv')
 
-df = pd.concat([df, pd.DataFrame([{col: '' for col in df.columns}])]).reset_index(drop=True)
-df = df.drop(index=3).reset_index(drop=True)
-df = df.drop(index=2).reset_index(drop=True)
-# Add column: new_column
-df['new_column'] = ''
-# Add column: new_column
-df['new_column'] = '12'
-# Add column: new_columns
-df['new_columns'] = '12'
-df = pd.concat([df, pd.DataFrame([{col: '12' for col in df.columns}])]).reset_index(drop=True)
+# Binning: Year of Birth (Custom)
+numeric_vals = pd.to_numeric(df['Year of Birth'], errors='coerce')
+binned = pd.cut(numeric_vals, bins=[1970.0, 1981.67, 1993.33, 2005.0])
+dummies = pd.get_dummies(binned, prefix='Year of Birth')
+dummies = dummies.replace({True: 'True', 1: 'True', False: 'False', 0: 'False'})
+df = pd.concat([df, dummies], axis=1)
+df.drop(columns=['Year of Birth'], inplace=True)
 
 # Select and order final columns
-df = df[['Year of Birth', 'City', 'new_column', 'new_columns']]
+df = df[['Gender', 'City', 'Year of Birth_(1970.0, 1981.67]', 'Year of Birth_(1981.67, 1993.33]', 'Year of Birth_(1993.33, 2005.0]']]
 df = df.reset_index(drop=True)
 
-df.to_csv(output_path, index=False)
-print(f'Done. Saved to {output_path}')
+df.to_csv('output.csv', index=False)

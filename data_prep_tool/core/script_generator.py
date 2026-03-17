@@ -110,25 +110,41 @@ class ScriptGenerator:
                 if parent_uuid not in processed_binning_parents:
                     parent_node = self.graph.get_node(parent_uuid)
                     base_name = node.params.get("pre_binning_name") or parent_node.current_name
-                    binned_name = node.current_name
+                    #binned_name = node.current_name # We now generate multiple columns usually
+                    
                     p_src = parent_node.params.get('source_name')
                     if p_src and p_src != base_name:
                         lines.append(f"df.rename(columns={{{self._s(p_src)}: {self._s(base_name)}}}, inplace=True)")
+                    
                     strategy = node.params.get("strategy")
                     n = node.params.get("n_bins")
                     cutoffs = node.params.get("cutoffs")
+                    t_val = node.params.get('true_label', 'True')
+                    f_val = node.params.get('false_label', 'False')
+
                     lines.append(f"# Binning: {base_name} ({strategy})")
-                    lines.append(f"df[{self._s(base_name)}] = pd.to_numeric(df[{self._s(base_name)}], errors='coerce')")
-                    if strategy == "Custom" and cutoffs:
-                        lines.append(f"df[{self._s(binned_name)}] = pd.cut(df[{self._s(base_name)}], bins={cutoffs}).astype(str)")
-                    elif strategy == "Intraordinal":
-                        lines.append(f"df[{self._s(binned_name)}] = pd.cut(df[{self._s(base_name)}], bins={n}, labels=False)")
-                    elif strategy in ["Equal Width", "Equidistant"]:
-                        lines.append(f"df[{self._s(binned_name)}] = pd.cut(df[{self._s(base_name)}], bins={n}).astype(str)")
+                    lines.append(f"numeric_vals = pd.to_numeric(df[{self._s(base_name)}], errors='coerce')")
+                    
+                    if strategy == "Ordinal":
+                         lines.append(f"binned_codes = pd.cut(numeric_vals, bins={n}, labels=False)")
+                         # Generated cumulative logic
+                         lines.append(f"dummies = pd.DataFrame(index=df.index)")
+                         lines.append(f"for i in range({n}):")
+                         col_expr = f"{{'{base_name}'}}_{{i}}" # f-string inside f-string needs escaping
+                         lines.append(f"    dummies[f{self._s(col_expr)}] = (binned_codes >= i)")
+                    elif strategy == "Custom" and cutoffs:
+                        lines.append(f"binned = pd.cut(numeric_vals, bins={cutoffs})")
+                        lines.append(f"dummies = pd.get_dummies(binned, prefix={self._s(base_name)})")
                     elif strategy in ["Equal Frequency", "Equinominal"]:
-                        lines.append(f"df[{self._s(binned_name)}] = pd.qcut(df[{self._s(base_name)}], q={n}, duplicates='drop').astype(str)")
-                    else:
-                        lines.append(f"df[{self._s(binned_name)}] = pd.cut(df[{self._s(base_name)}], bins={n}).astype(str)")
+                        lines.append(f"binned = pd.qcut(numeric_vals, q={n}, duplicates='drop')")
+                        lines.append(f"dummies = pd.get_dummies(binned, prefix={self._s(base_name)})")
+                    else: # Equal Width default
+                        lines.append(f"binned = pd.cut(numeric_vals, bins={n})")
+                        lines.append(f"dummies = pd.get_dummies(binned, prefix={self._s(base_name)})")
+                    
+                    lines.append(f"dummies = dummies.replace({{True: {self._s(t_val)}, 1: {self._s(t_val)}, False: {self._s(f_val)}, 0: {self._s(f_val)}}})")
+                    lines.append(f"df = pd.concat([df, dummies], axis=1)")
+
                     lines.append(f"df.drop(columns=[{self._s(base_name)}], inplace=True)")
                     processed_binning_parents.add(parent_uuid)
 

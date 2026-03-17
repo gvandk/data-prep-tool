@@ -23,7 +23,7 @@ class ColumnEncoding(QWidget):
         self.encoding_combo.addItems([
             "None", "One-Hot", 
             "Equal Width", "Equal Frequency", 
-            "Intraordinal", "Custom"
+            "Ordinal", "Custom"
         ])
         self.header_layout.addWidget(self.header_label)
         self.header_layout.addWidget(self.encoding_combo)
@@ -105,7 +105,7 @@ class ColumnEncoding(QWidget):
         self.encoding_combo.setCurrentText(encoding if encoding else "None")
         self.bins_spin.setValue(n_bins if n_bins else 5)
 
-        is_binning = encoding in ["Equal Width", "Equal Frequency", "Intraordinal", "Custom"]
+        is_binning = encoding in ["Equal Width", "Equal Frequency", "Ordinal", "Custom"]
         is_onehot = encoding == "One-Hot"
         is_custom = encoding == "Custom"
 
@@ -207,7 +207,7 @@ class ColumnEncoding(QWidget):
     def on_combo_changed(self, text):
         if not self.uuid: return
         
-        is_binning = text in ["Equal Width", "Equal Frequency", "Intraordinal", "Custom"]
+        is_binning = text in ["Equal Width", "Equal Frequency", "Ordinal", "Custom"]
         self.binning_config_container.setVisible(is_binning)
         
         is_custom = (text == "Custom")
@@ -228,5 +228,5 @@ class ColumnEncoding(QWidget):
         
         if text == "Custom":
             self._generate_edge_inputs(value)
-        elif text in ["Equal Width", "Equal Frequency", "Intraordinal"]:
+        elif text in ["Equal Width", "Equal Frequency", "Ordinal"]:
             self.column_binning_request.emit(self.uuid, text, value, [])

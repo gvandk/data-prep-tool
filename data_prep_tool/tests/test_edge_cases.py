@@ -285,14 +285,14 @@ class TestBinningEdgeCases(unittest.TestCase):
         script = generate_script(mgr)
         self.assertIn("df.drop(columns=['Age']", script)
 
-    def test_intraordinal_script_uses_correct_syntax(self):
-        """Intraordinal binning must use pd.cut with labels=False."""
+    def test_ordinal_script_uses_correct_syntax(self):
+        """Ordinal binning must use pd.cut with labels=False."""
         df = pd.DataFrame({'Score': [10, 30, 50, 70, 90]})
         _, mgr = make_manager(df)
-        mgr.add_binning(0, 'Intraordinal', 3)
+        mgr.add_binning(0, 'Ordinal', 3)
 
         script = generate_script(mgr)
-        self.assertIn("pd.cut(df['Score'], bins=3, labels=False)", script)
+        self.assertIn("binned_codes = pd.cut(numeric_vals, bins=3, labels=False)", script)
 
     def test_custom_binning_uses_provided_cutoffs(self):
         """Custom binning script must include the exact cutoffs supplied."""
@@ -301,8 +301,7 @@ class TestBinningEdgeCases(unittest.TestCase):
         mgr.add_binning(0, 'Custom', 2, cutoffs=[0, 5, 10])
 
         script = generate_script(mgr)
-        self.assertIn("[0, 5, 10]", script)
-        self.assertIn("pd.cut(df['Val'], bins=[0, 5, 10])", script)
+        self.assertIn("binned = pd.cut(numeric_vals, bins=[0, 5, 10])", script)
 
     def test_equal_frequency_script_uses_qcut(self):
         """Equal Frequency binning must use pd.qcut in the generated script."""
@@ -311,7 +310,7 @@ class TestBinningEdgeCases(unittest.TestCase):
         mgr.add_binning(0, 'Equal Frequency', 4)
 
         script = generate_script(mgr)
-        self.assertIn("pd.qcut(df['V'], q=4", script)
+        self.assertIn("binned = pd.qcut(numeric_vals, q=4", script)
 
 
 # ===========================================================================
