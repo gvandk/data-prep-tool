@@ -15,7 +15,7 @@ This project was created as part of a bachelor thesis at Palacký University Olo
    data-prep-tool
    ```
 
-### Run tests
+#### Run tests
 1. Install development/test dependencies:
    ```bash
    pip install -e .[dev]
