@@ -27,9 +27,20 @@ class DataFrameWrapper:
         return self.uuid_manager.get_uuid_by_name(name)
     
     def rename_column(self, uuid: str, new_name: str):
-        """Rename a column given its UUID."""
+        """Rename a column given its UUID.
+        
+        Raises:
+            ValueError: If new_name already exists in the DataFrame.
+        """
         old_name = self.uuid_manager.get_name_by_uuid(uuid)
-        if old_name:
+        
+        if old_name == new_name:
+            return
+
+        if new_name in self.df.columns:
+            raise ValueError(f"Column '{new_name}' already exists.")
+
+        if old_name is not None:
             self.df.rename(columns={old_name: new_name}, inplace=True)
             self.uuid_manager.rename_column(old_name, new_name)
 
@@ -58,22 +69,23 @@ class DataFrameWrapper:
     def remove_column(self, uuid: str):
         """Remove a column by its UUID."""
         col_name = self.get_col_name_by_uuid(uuid)
-        if col_name and col_name in self.df.columns:
+        if col_name is not None and col_name in self.df.columns:
             self.df.drop(columns=[col_name], inplace=True)
             self.uuid_manager.remove_column(uuid)
     
-    def add_child_columns(self, parent_uuid: str, new_dict: dict):
+    def add_child_columns(self, parent_uuid: str, new_dict: dict, child_uuids: Optional[List[str]] = None):
         """Add child columns to a parent column.
         
         Args:
             parent_uuid: UUID of the parent column
             new_dict: Dictionary of child column names to column data
+            child_uuids: Optional list of UUIDs to use for the new columns
             
         Raises:
             ValueError: If any column name already exists in the DataFrame
         """
         parent_name = self.get_col_name_by_uuid(parent_uuid)
-        if parent_name:
+        if parent_name is not None:
             # Check if any child column name already exists
             existing_columns = [name for name in new_dict.keys() if name in self.df.columns]
             if existing_columns:
@@ -85,7 +97,7 @@ class DataFrameWrapper:
                     self.df[col_name] = col_data.copy()
                 else:
                     self.df[col_name] = col_data
-            self.uuid_manager.add_child_columns(parent_name, list(new_dict.keys()))
+            self.uuid_manager.add_child_columns(parent_name, list(new_dict.keys()), child_uuids)
 
     def get_children_uuids(self, parent_uuid: str) -> Optional[List[str]]:
         """Get list of child UUIDs for a given parent UUID."""
@@ -109,13 +121,13 @@ class DataFrameWrapper:
     def get_cell_value(self, uuid: str, row_index: int):
         """Get the value of a cell given column UUID and row index."""
         col_name = self.get_col_name_by_uuid(uuid)
-        if col_name and col_name in self.df.columns:
+        if col_name is not None and col_name in self.df.columns:
             return self.df.at[row_index, col_name]    
     
     def set_cell_value(self, uuid: str, row_index: int, value):
         """Set the value of a cell given column UUID and row index."""
         col_name = self.get_col_name_by_uuid(uuid)
-        if col_name and col_name in self.df.columns:
+        if col_name is not None and col_name in self.df.columns:
             
             # --- 1. Prevent Crash: Float -> Integer Column ---
             # If we try to put 2.5 into an 'int64' column, pandas crashes.

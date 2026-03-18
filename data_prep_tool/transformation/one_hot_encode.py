@@ -36,7 +36,15 @@ class oneHotEncodeTransformation(BaseTransformation):
         parent_index = col_order.index(self.col_uuid)
         self._parent_insert_index = parent_index
 
-        df_wrapper.add_child_columns(self.col_uuid, {col: self.dummies[col] for col in self.dummies.columns})
+        # If we have existing child UUIDs (from a previous run), reuse them if they match the column count/names
+        current_child_names = list(self.dummies.columns)
+        child_uuids_to_use = None
+        
+        # Simple heuristic: if we have stored UUIDs and the count matches, assume order is preserved (get_dummies is deterministic for same data/cats)
+        if self.child_uuids and len(self.child_uuids) == len(current_child_names):
+             child_uuids_to_use = self.child_uuids
+
+        df_wrapper.add_child_columns(self.col_uuid, {col: self.dummies[col] for col in self.dummies.columns}, child_uuids_to_use)
         self.child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
         
         df_wrapper.remove_column(self.col_uuid)
@@ -91,6 +99,23 @@ class oneHotEncodeTransformation(BaseTransformation):
             [self.col_uuid] +
             non_child_order[insert_index:]
         )
+
+        # 1. Primary Cleanup: Remove children using known UUIDs
+        # We try to remove whatever we think are the children
+        for child_uuid in (child_uuids or []):
+             df_wrapper.remove_column(child_uuid)
+
+        # 2. Safety Cleanup: Remove columns by name (Fix for broken UUID chains)
+        # If columns were deleted and restored (Undo), they get new UUIDs and lose parent link.
+        # We must remove them by name to avoid "Column already exists" on re-apply.
+        if self.created_names:
+            for name in self.created_names:
+                if name in df_wrapper.df.columns:
+                     current_uuid = df_wrapper.get_uuid_by_name(name)
+                     if current_uuid:
+                         df_wrapper.remove_column(current_uuid)
+                     else:
+                         df_wrapper.df.drop(columns=[name], inplace=True)
 
         df_wrapper.restore_parent(self.col_uuid, self.column, self.values)
         df_wrapper.reorder_columns(new_order)

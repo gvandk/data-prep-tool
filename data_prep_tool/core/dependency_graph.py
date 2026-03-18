@@ -71,17 +71,18 @@ class DependencyGraph:
             )
 
     def register_cell_edit(self, uuid: str, row_index: int, new_value):
-        if uuid in self.nodes:
-            if "manual_edits" not in self.nodes[uuid].params:
-                self.nodes[uuid].params["manual_edits"] = []
-            
-            edits = self.nodes[uuid].params["manual_edits"]
-            for edit in edits:
-                if edit["row"] == row_index:
-                    edit["value"] = new_value
-                    return
-            
-            edits.append({"row": row_index, "value": new_value})
+        node_id = f"cell_edit_{len(self.nodes)}"
+        self.nodes[node_id] = GraphNode(
+            uuid=node_id,
+            current_name="",  # Cell edit doesn't create a column with a name
+            operation="CELL_EDIT",
+            parents=[uuid],
+            params={
+                "row_index": row_index,
+                "value": new_value,
+                "target_col_uuid": uuid
+            }
+        )
 
     def register_row_delete(self, row_index: int):
         self.nodes[f"row_delete_{len(self.nodes)}"] = GraphNode(

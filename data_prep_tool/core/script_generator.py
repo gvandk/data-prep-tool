@@ -16,31 +16,33 @@ class ScriptGenerator:
         if final_col_uuids:
             for uuid in final_col_uuids:
                 node = self.graph.get_node(uuid)
-                if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD"):
+                if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT"):
                     selected_final_nodes.append(node)
-
-        #col_active_nodes = [n for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD")]
-
-        # Find source path from the first LOAD node
-        source_path = 'data.csv'
-        for node in self.graph.nodes.values():
-            if node.operation == 'LOAD':
-                sp = node.params.get('source_path')
-                if sp:
-                    source_path = sp
-                break
 
         lines = [
             "import pandas as pd",
             "import numpy as np",
+            "import sys",
+            "import os",
+            "",
+            "if len(sys.argv) != 3:",
+            "    print(\"Usage: python script.py <input_csv> <output_csv>\")",
+            "    sys.exit(1)",
+            "",
+            "input_path = sys.argv[1]",
+            "output_path = sys.argv[2]",
+            "",
+            "if not os.path.exists(input_path):",
+            "    print(f\"Error: Input file '{input_path}' not found.\")",
+            "    sys.exit(1)",
             "",
             "# Load Data",
-            f"df = pd.read_csv('{source_path}')",
+            "df = pd.read_csv(input_path)",
             ""
         ]
 
         if not active_nodes:
-            lines.append("df.to_csv('output.csv', index=False)")
+            lines.append("df.to_csv(output_path, index=False)")
             return "\n".join(lines)
 
         # Build sorted steps via dependency trace
@@ -59,6 +61,20 @@ class ScriptGenerator:
         for node in active_nodes:
             trace(node.uuid)
 
+        # Optimization: Coalesce consecutive CELL_EDIT operations on same cell
+        optimized_steps = []
+        for node in sorted_steps:
+             if node.operation == "CELL_EDIT" and optimized_steps:
+                last_node = optimized_steps[-1]
+                if (last_node.operation == "CELL_EDIT" and 
+                    last_node.params.get('target_col_uuid') == node.params.get('target_col_uuid') and
+                    last_node.params.get('row_index') == node.params.get('row_index')):
+                    # Replace the last edit with this newer one as it overwrites it
+                    optimized_steps[-1] = node
+                    continue
+             optimized_steps.append(node)
+        sorted_steps = optimized_steps
+
         processed_binning_parents: Set[str] = set()
         processed_one_hot_parents: Set[str] = set()
 
@@ -70,8 +86,14 @@ class ScriptGenerator:
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
-                for edit in node.params.get('manual_edits', []):
-                    lines.append(f"df.at[{edit['row']}, {self._s(node.current_name)}] = {repr(edit['value'])}")
+            
+            elif node.operation == "CELL_EDIT":
+                target_uuid = node.params.get('target_col_uuid')
+                target_node = self.graph.get_node(target_uuid)
+                col_name = target_node.current_name
+                row = node.params.get('row_index')
+                val = node.params.get('value')
+                lines.append(f"df.at[{row}, {self._s(col_name)}] = {repr(val)}")
             
             elif node.operation == "ROW_DELETE":
                     adjusted = node.params.get('row_index') - processed_delete_offset
@@ -147,12 +169,16 @@ class ScriptGenerator:
 
                     lines.append(f"df.drop(columns=[{self._s(base_name)}], inplace=True)")
                     processed_binning_parents.add(parent_uuid)
+                
+                src = node.params.get('source_name')
+                if src and src != node.current_name:
+                    lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
 
         # --- Column selection ---
         if final_col_uuids:
             final_cols = [n.current_name for n in selected_final_nodes]
         else:
-            final_cols = [n.current_name for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD")]
+            final_cols = [n.current_name for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT")]
         final_cols_str = ", ".join(self._s(col) for col in final_cols)
         lines.append("")
         lines.append(f"# Select and order final columns")
@@ -160,6 +186,7 @@ class ScriptGenerator:
         lines.append("df = df.reset_index(drop=True)")
         lines.append("")
 
-        lines.append("df.to_csv('output.csv', index=False)")
+        lines.append("df.to_csv(output_path, index=False)")
+        lines.append("print(f\"Successfully processed '{input_path}' and saved to '{output_path}'.\")")
 
         return "\n".join(lines)

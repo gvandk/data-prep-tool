@@ -95,7 +95,12 @@ class BinningTransformation(BaseTransformation):
             col_order = df_wrapper.get_all_uuids()
             parent_index = col_order.index(self.col_uuid)
 
-            df_wrapper.add_child_columns(self.col_uuid, final_cols)
+            current_child_names = list(final_cols.keys())
+            child_uuids_to_use = None
+            if self.child_uuids and len(self.child_uuids) == len(current_child_names):
+                child_uuids_to_use = self.child_uuids
+
+            df_wrapper.add_child_columns(self.col_uuid, final_cols, child_uuids_to_use)
             self.child_uuids = df_wrapper.get_children_uuids(self.col_uuid)
             df_wrapper.remove_column(self.col_uuid)
             

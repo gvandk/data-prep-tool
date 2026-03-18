@@ -14,7 +14,7 @@ class ColumnRename(QHBoxLayout):
         self.rename_input.textChanged.connect(self.on_text_edited)
 
     def set_current_column(self, uuid: str, name: str):
-        self.index = uuid
+        self.uuid = uuid
         self.rename_input.blockSignals(True)
         self.rename_input.setText(name)
         self.rename_input.blockSignals(False)

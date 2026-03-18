@@ -56,7 +56,7 @@ class ColUUIDManager:
             self.uuid_to_name[col_uuid] = col_name
             self.name_to_uuid[col_name] = col_uuid
 
-    def add_child_columns(self, parent_name: str, child_names: List[str]):
+    def add_child_columns(self, parent_name: str, child_names: List[str], child_uuids: Optional[List[str]] = None):
         """Add child columns to a parent column."""
         parent_uuid = self.get_uuid_by_name(parent_name)
         if parent_uuid is None:
@@ -65,8 +65,11 @@ class ColUUIDManager:
         if parent_uuid not in self.children_map:
             self.children_map[parent_uuid] = []
         
-        for child_name in child_names:
-            child_uuid = str(uuid.uuid4())
+        for i, child_name in enumerate(child_names):
+            if child_uuids and i < len(child_uuids):
+                child_uuid = child_uuids[i]
+            else:
+                child_uuid = str(uuid.uuid4())
             self.uuid_to_name[child_uuid] = child_name
             self.name_to_uuid[child_name] = child_uuid
             self.parent_map[child_uuid] = parent_uuid
@@ -136,10 +139,7 @@ class ColUUIDManager:
 
     def restore_parent(self, parent_uuid:str, parent_name: str):
         """Restore parent column and remove child column mappings."""
-        if parent_uuid not in self.children_map:
-            return
-        
-        #restore basic mappings
+        # Restore basic mappings even if children map entry is gone (e.g. manually cleaned up)
         self.uuid_to_name[parent_uuid] = parent_name
         self.name_to_uuid[parent_name] = parent_uuid
 

@@ -135,8 +135,15 @@ class TransformationManager:
                     parent_uuid = transformation.col_uuid
                     child_uuids = transformation.child_uuids
                     child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
-                    orig_names = getattr(transformation, 'created_names', child_names)
                     
+                    # Robustly try to find original names
+                    orig_names = getattr(transformation, 'created_names', [])
+                    if not orig_names and getattr(transformation, 'dummies', None) is not None:
+                        orig_names = list(transformation.dummies.columns)
+                    
+                    if not orig_names:
+                        orig_names = child_names
+
                     graph.register_one_hot(
                         parent_uuid=parent_uuid, 
                         child_uuids=child_uuids, 
@@ -152,7 +159,14 @@ class TransformationManager:
                     parent_uuid = transformation.col_uuid
                     child_uuids = transformation.child_uuids
                     child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
-                    orig_names = getattr(transformation, 'created_names', child_names)
+                    
+                    # Robustly try to find original names
+                    orig_names = getattr(transformation, 'created_names', [])
+                    if not orig_names and getattr(transformation, 'dummies', None) is not None:
+                        orig_names = list(transformation.dummies.columns)
+                    
+                    if not orig_names:
+                        orig_names = child_names
 
                     graph.register_binning(
                         parent_uuid=parent_uuid, 
