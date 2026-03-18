@@ -3,10 +3,10 @@ import ctypes
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication, QStyle
 from PyQt6.QtGui import QIcon
-from .ui.main_window import MainWindow
-from .ui.main_controller import MainController
-from .core.transformation_manager import TransformationManager
-from .core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.ui.main_window import MainWindow
+from data_prep_tool.ui.main_controller import MainController
+from data_prep_tool.core.transformation_manager import TransformationManager
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
 
 def _resolve_icon_path() -> Path | None:
