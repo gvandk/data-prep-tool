@@ -3,6 +3,7 @@ from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QKeyEvent
 
 class TableView(QTableView):
+    """Custom QTableView that emits signals for column reordering, header double-clicks, and delete key presses."""
     column_reorder_requested = pyqtSignal(list)
     header_double_clicked = pyqtSignal(int)
     delete_pressed = pyqtSignal()
@@ -20,7 +21,8 @@ class TableView(QTableView):
         header.sectionMoved.connect(self.on_column_moved)
         header.sectionDoubleClicked.connect(self.on_header_double_clicked)
 
-    def on_column_moved(self, logicalIndex, oldVisualIndex, newVisualIndex):
+    def on_column_moved(self):
+        """Emit the new column order as a list of UUIDs after a column has been moved."""
         model = self.model()
         if not model:
             return
@@ -36,6 +38,7 @@ class TableView(QTableView):
         self.column_reorder_requested.emit(uuid_order)
 
     def on_header_double_clicked(self, logicalIndex):
+        """Emit the UUID of the double-clicked header column."""
         model=self.model()
         if not model:
             return

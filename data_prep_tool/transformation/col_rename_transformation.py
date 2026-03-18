@@ -2,7 +2,7 @@ from .base_transformation import BaseTransformation
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
 class ColumnRenameTransformation(BaseTransformation):
-
+    """Transformation for renaming a column."""
     def __init__(self, col_index: int, new_name: str):
         self.col_index = col_index
         self.col_uuid = None

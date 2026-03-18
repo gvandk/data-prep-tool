@@ -1,9 +1,10 @@
 from .base_transformation import BaseTransformation
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
-import numpy as np
 
 class BinningTransformation(BaseTransformation):
+    """Transformation to bin numeric columns into categorical bins based on specified strategies, 
+    with support for both ordinal and interval-based encoding."""
     def __init__(self, col_index: int, strategy: str, n_bins: int, cutoffs: list = None, true_label: str = "True", false_label: str = "False"):
         self.col_index = col_index
         self.strategy = strategy
@@ -25,50 +26,35 @@ class BinningTransformation(BaseTransformation):
         
         self.column = df_wrapper.get_col_name_by_uuid(self.col_uuid)
         self.values = df_wrapper.get_col_data_by_uuid(self.col_uuid).copy()
-        
-        binned_col_name = f"{self.column}_binned"
 
         try:
             numeric_values = pd.to_numeric(self.values, errors='coerce')
+
+            def encode_binary_flags(frame: pd.DataFrame) -> pd.DataFrame:
+                mapping = {True: self.true_label, False: self.false_label}
+                encoded = pd.DataFrame(index=frame.index)
+                for col_name in frame.columns:
+                    encoded[col_name] = frame[col_name].map(mapping)
+                return encoded
             
             # Helper to generate dummies from binned series
             def create_binned_dummies(binned_series, prefix):
                 dummies = pd.get_dummies(binned_series, prefix=prefix)
-                # Replace boolean values with user-defined labels
-                # Note: get_dummies returns uint8 (0/1) or bool depending on version/args
-                # We force replace
-                return dummies.replace({
-                    True: self.true_label, 1: self.true_label,
-                    False: self.false_label, 0: self.false_label
-                })
+                return encode_binary_flags(dummies)
 
             if self.strategy == "Ordinal":
-                # Ordinal/Cumulative encoding
-                # 1. Get integer codes (0..N-1)
+                # Ordinal/Cumulative encoding: Create n_bins columns where column i is True if value falls in bin i or higher
                 binned_codes = pd.cut(numeric_values, bins=self.n_bins, labels=False)
                 
-                # 2. Create cumulative boolean columns
                 dummies = pd.DataFrame(index=numeric_values.index)
                 for i in range(self.n_bins):
-                    # Column i is True if value falls in bin i or higher -> NO, user said:
-                    # "if something has 3 stars, columns 1 star, 2 star, 3 star will be TRUE"
-                    # If 0-indexed: 3 stars = index 2. So indices 0, 1, 2 are True.
-                    # So col_i is True if code >= i.
                     col_name = f"{self.column}_{i}"
-                    
-                    # Logic: code >= i
-                    # e.g. code=2 (3 stars).
-                    # i=0: 2>=0 -> T
-                    # i=1: 2>=1 -> T
-                    # i=2: 2>=2 -> T
-                    # i=3: 2>=3 -> F
                     dummies[col_name] = (binned_codes >= i)
                 
-                # Replace boolean with labels
-                dummies = dummies.replace({True: self.true_label, False: self.false_label})
+                dummies = encode_binary_flags(dummies)
 
             else:
-                # Interval-based strategies: Create one-hot encoded columns for each bin
+                # Interval-based strategies: Create n_bins columns where column i is True if value falls in bin i
                 if self.strategy == "Custom":
                     if not self.cutoffs:
                         raise ValueError("Cutoffs required")
@@ -78,14 +64,12 @@ class BinningTransformation(BaseTransformation):
                     binned = pd.cut(numeric_values, bins=self.n_bins)
 
                 elif self.strategy in ["Equal Frequency", "Equinominal"]:
-                    # use qcut
                     binned = pd.qcut(numeric_values, q=self.n_bins, duplicates='drop')
 
                 else:
-                    # Default fallback
+                    # Default fallback: treat as equal width
                     binned = pd.cut(numeric_values, bins=self.n_bins)
                 
-                # Convert categorical/interval series to dummies
                 dummies = create_binned_dummies(binned, self.column)
 
             final_cols = {col: dummies[col] for col in dummies.columns}

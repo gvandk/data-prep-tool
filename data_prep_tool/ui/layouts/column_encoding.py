@@ -33,7 +33,7 @@ class ColumnEncoding(QWidget):
         self.bin_config_layout = QVBoxLayout(self.binning_config_container)
         self.bin_config_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 1. Number of Bins
+        # Number of Bins
         self.bins_row = QHBoxLayout()
         self.bins_label = QLabel("Number of Bins:")
         self.bins_spin = QSpinBox()
@@ -44,7 +44,7 @@ class ColumnEncoding(QWidget):
         self.bins_row.addStretch()
         self.bin_config_layout.addLayout(self.bins_row)
 
-        # 2. Custom Edges Area
+        # Custom Edges Area
         self.edges_label = QLabel("Cut-off Points (Edges):")
         self.bin_config_layout.addWidget(self.edges_label)
         
@@ -53,7 +53,7 @@ class ColumnEncoding(QWidget):
         self.edges_layout.setContentsMargins(0,0,0,0)
         self.bin_config_layout.addWidget(self.edges_container)
 
-        # 3. Apply Button
+        # Apply Button
         self.apply_custom_btn = QPushButton("Apply Custom Bins")
         self.apply_custom_btn.clicked.connect(self.on_apply_custom_clicked)
         self.bin_config_layout.addWidget(self.apply_custom_btn)
@@ -95,6 +95,7 @@ class ColumnEncoding(QWidget):
         self.bins_spin.valueChanged.connect(self.on_bins_changed)
 
     def set_current_column(self, uuid: str, encoding: str = None, child_columns: dict = None, n_bins: int = 5, parent_name: str = "", min_val: float = 0, max_val: float = 100):
+        """Set the current column context for the encoding panel."""
         self.uuid = uuid
         self.data_min = min_val
         self.data_max = max_val
@@ -143,9 +144,8 @@ class ColumnEncoding(QWidget):
         try:
             defaults = np.linspace(self.data_min, self.data_max, n_bins + 1)
         except Exception:
-            defaults = [i * 10 for i in range(n_bins + 1)] # Fallback
+            defaults = [i * 10 for i in range(n_bins + 1)]
 
-        # Create N+1 inputs
         for i in range(n_bins + 1):
             row = QHBoxLayout()
             label_text = "Min:" if i == 0 else "Max:" if i == n_bins else f"Cut {i}:"
@@ -163,6 +163,7 @@ class ColumnEncoding(QWidget):
             self._edge_widgets.append(spin)
 
     def _populate_children(self, child_columns: dict, parent_name: str):
+        """Populate the child columns section with rename options for each generated column."""
         self._clear_children()
         
         if parent_name:
@@ -179,6 +180,7 @@ class ColumnEncoding(QWidget):
             self.children_layout.addLayout(rename_layout)
     
     def _clear_children(self):
+        """Remove all child column widgets from the layout."""
         while self.children_layout.count() > 2:
             item = self.children_layout.takeAt(2)
             widget = item.widget()
@@ -193,6 +195,7 @@ class ColumnEncoding(QWidget):
                 child_layout.deleteLater()
 
     def on_apply_custom_clicked(self):
+        """Validate custom edges and emit binning request if valid."""
         try:
             edges = [w.value() for w in self._edge_widgets]
             for i in range(len(edges)-1):
@@ -205,6 +208,7 @@ class ColumnEncoding(QWidget):
             QMessageBox.warning(self, "Invalid Cut-offs", str(e))
 
     def on_combo_changed(self, text):
+        """Handle changes in encoding selection and show/hide relevant options."""
         if not self.uuid: return
         
         is_binning = text in ["Equal Width", "Equal Frequency", "Ordinal", "Custom"]
@@ -223,6 +227,7 @@ class ColumnEncoding(QWidget):
             self.column_encoding_request.emit(self.uuid, text)
 
     def on_bins_changed(self, value):
+        """Handle changes in number of bins and update edge inputs if in Custom mode."""
         if not self.uuid: return
         text = self.encoding_combo.currentText()
         

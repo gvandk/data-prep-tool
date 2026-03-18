@@ -3,6 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 class RowAddTransformation(BaseTransformation):
+    """Transformation for adding a new row."""
     def __init__(self, default_value):
         self.default_value = default_value
 

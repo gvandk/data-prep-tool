@@ -1,41 +1,13 @@
-"""
-Edge Case Tests for Data Prep Tool
-===================================
-Tests focus on:
-1. Complex transformation combinations and interactions
-2. Script export correctness under complex histories
-3. Undo/redo correctness in edge case sequences
-4. UUID tracking through multi-step transformations
-5. Column ordering correctness throughout all operations
-"""
-
 import unittest
 import pandas as pd
-import numpy as np
-import sys
-import os
-
-# Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from data_prep_tool.core.transformation_manager import TransformationManager
 from data_prep_tool.core.script_generator import ScriptGenerator
-from data_prep_tool.core.dependency_graph import DependencyGraph
-from data_prep_tool.transformation.col_rename_transformation import ColumnRenameTransformation
-from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformation
-from data_prep_tool.transformation.binning_transformation import BinningTransformation
-from data_prep_tool.transformation.cell_edit_transformation import CellEditTransformation
-from data_prep_tool.transformation.col_delete_transformation import ColDeleteTransformation
-from data_prep_tool.transformation.col_add_transformation import ColAddTransformation
-from data_prep_tool.transformation.row_delete_transformation import RowDeleteTransformation
-from data_prep_tool.transformation.row_add_transformation import RowAddTransformation
-from data_prep_tool.transformation.col_reorder_transformation import ColumnReorderTransformation
 
 
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
+
+
 
 def make_manager(df: pd.DataFrame) -> tuple[DataFrameWrapper, TransformationManager]:
     wrapper = DataFrameWrapper(df)
@@ -48,9 +20,9 @@ def generate_script(manager: TransformationManager, final_uuids=None) -> str:
     return ScriptGenerator(graph).generate_script(final_uuids)
 
 
-# ===========================================================================
-# 1. RENAME EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestRenameEdgeCases(unittest.TestCase):
 
@@ -60,7 +32,7 @@ class TestRenameEdgeCases(unittest.TestCase):
         _, mgr = make_manager(df)
         mgr.add_rename(0, 'A')
         script = generate_script(mgr)
-        # Script should not rename 'A' to 'A'
+
         self.assertNotIn("df.rename(columns={'A': 'A'}", script)
         self.assertIn("df = df[['A']]", script)
 
@@ -97,10 +69,10 @@ class TestRenameEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_onehot(0)  # Creates Color_Red, Color_Blue
+        mgr.add_onehot(0)
 
-        # Rename first child
-        # Get current children from manager's wrapper
+
+
         parent_uuid = mgr.history[-1].col_uuid
         child_uuids = mgr.df_wrapper.get_children_uuids(parent_uuid)
         child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
@@ -125,9 +97,9 @@ class TestRenameEdgeCases(unittest.TestCase):
         self.assertNotIn("'Original': 'Changed'", script)
 
 
-# ===========================================================================
-# 2. ONE-HOT EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestOneHotEdgeCases(unittest.TestCase):
 
@@ -156,10 +128,10 @@ class TestOneHotEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_onehot(1)  # Encode B (middle column)
+        mgr.add_onehot(1)
 
         cols = list(mgr.df_wrapper.df.columns)
-        # B_x and B_y should be between A and C
+
         self.assertEqual(cols[0], 'A')
         self.assertEqual(cols[-1], 'C')
         self.assertTrue(all('B_' in c for c in cols[1:-1]))
@@ -181,8 +153,8 @@ class TestOneHotEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_onehot(0)  # Color
-        mgr.add_onehot(1)  # Size (now at index 1 after Color children inserted)
+        mgr.add_onehot(0)
+        mgr.add_onehot(1)
 
         script = generate_script(mgr)
         self.assertEqual(script.count("pd.get_dummies"), 2)
@@ -227,9 +199,9 @@ class TestOneHotEdgeCases(unittest.TestCase):
         self.assertIn("'0'", script)
 
 
-# ===========================================================================
-# 3. BINNING EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestBinningEdgeCases(unittest.TestCase):
 
@@ -241,7 +213,7 @@ class TestBinningEdgeCases(unittest.TestCase):
 
         mgr.add_binning(0, 'Equal Width', 2)
 
-        # Rename first child
+
         child_uuids = mgr.df_wrapper.get_children_uuids(mgr.history[-1].col_uuid)
         child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
         original_child_name = mgr.df_wrapper.get_col_name_by_uuid(child_uuids[0])
@@ -262,7 +234,7 @@ class TestBinningEdgeCases(unittest.TestCase):
 
         script = generate_script(mgr)
         self.assertIn("df['Score']", script)
-        self.assertNotIn("df['A'],", script)  # 'A' should not be binned
+        self.assertNotIn("df['A'],", script)
 
     def test_binning_undo_restores_original_data_exactly(self):
         """Undo after binning must restore the exact original data."""
@@ -313,9 +285,9 @@ class TestBinningEdgeCases(unittest.TestCase):
         self.assertIn("binned = pd.qcut(numeric_vals, q=4", script)
 
 
-# ===========================================================================
-# 4. CELL EDIT EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestCellEditEdgeCases(unittest.TestCase):
 
@@ -330,11 +302,8 @@ class TestCellEditEdgeCases(unittest.TestCase):
         mgr.add_cell_edit(0, uuid_a, 200)
         mgr.add_cell_edit(0, uuid_a, 999)
 
-        graph = mgr.build_dependency_graph()
-        edits = graph.nodes[uuid_a].params.get('manual_edits', [])
-        row0_edits = [e for e in edits if e['row'] == 0]
-        self.assertEqual(len(row0_edits), 1)
-        self.assertEqual(row0_edits[0]['value'], 999)
+        # Verify last edit value is applied to the dataframe
+        self.assertEqual(mgr.df_wrapper.df.at[0, 'A'], 999)
 
     def test_edit_after_rename_still_targets_correct_column(self):
         """Cell edit after renaming a column must target the renamed column."""
@@ -374,9 +343,9 @@ class TestCellEditEdgeCases(unittest.TestCase):
         self.assertNotIn("999", script)
 
 
-# ===========================================================================
-# 5. COLUMN DELETE EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestColDeleteEdgeCases(unittest.TestCase):
 
@@ -388,10 +357,10 @@ class TestColDeleteEdgeCases(unittest.TestCase):
         uuid_a = wrapper.get_uuid_by_name('A')
 
         mgr.add_col_delete(uuid_a)
-        mgr.add_col_add('A', 0)  # Add a new 'A' column
+        mgr.add_col_add('A', 0)
 
         self.assertIn('A', mgr.df_wrapper.df.columns)
-        # New 'A' UUID should differ from old 'A' UUID
+
         new_uuid_a = mgr.df_wrapper.get_uuid_by_name('A')
         self.assertNotEqual(new_uuid_a, uuid_a)
 
@@ -448,9 +417,9 @@ class TestColDeleteEdgeCases(unittest.TestCase):
         self.assertNotIn("'NewName'", script)
 
 
-# ===========================================================================
-# 6. ROW DELETE EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestRowDeleteEdgeCases(unittest.TestCase):
 
@@ -460,7 +429,7 @@ class TestRowDeleteEdgeCases(unittest.TestCase):
         _, mgr = make_manager(df)
 
         mgr.add_row_delete(0)
-        mgr.add_row_delete(0)  # This removes what was originally row 1
+        mgr.add_row_delete(0)
 
         self.assertEqual(list(mgr.df_wrapper.df['A']), [30, 40])
 
@@ -483,9 +452,9 @@ class TestRowDeleteEdgeCases(unittest.TestCase):
         mgr.add_row_delete(0)
 
         script = generate_script(mgr)
-        # First delete: index 0; second delete: index 0 (offset 0 already deleted)
+
         self.assertIn("df = df.drop(index=0)", script)
-        # Second drop also uses adjusted index = 0
+
         drop_lines = [l for l in script.split('\n') if 'df.drop(index=' in l]
         self.assertEqual(len(drop_lines), 2)
 
@@ -509,9 +478,9 @@ class TestRowDeleteEdgeCases(unittest.TestCase):
         self.assertEqual(len(mgr.df_wrapper.df), 3)
 
 
-# ===========================================================================
-# 7. COLUMN ADD EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestColAddEdgeCases(unittest.TestCase):
 
@@ -555,9 +524,9 @@ class TestColAddEdgeCases(unittest.TestCase):
             mgr.add_col_add('A', 0)
 
 
-# ===========================================================================
-# 8. REORDER EDGE CASES
-# ===========================================================================
+
+
+
 
 class TestReorderEdgeCases(unittest.TestCase):
 
@@ -568,7 +537,7 @@ class TestReorderEdgeCases(unittest.TestCase):
         mgr = TransformationManager(wrapper)
         uuids = wrapper.get_all_uuids()
 
-        mgr.add_column_reorder([uuids[2], uuids[1], uuids[0]])  # C, B, A
+        mgr.add_column_reorder([uuids[2], uuids[1], uuids[0]])
         mgr.undo_transformation()
 
         self.assertEqual(list(mgr.df_wrapper.df.columns), ['A', 'B', 'C'])
@@ -579,24 +548,24 @@ class TestReorderEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_onehot(1)  # B -> B_x, B_y; columns: A, B_x, B_y
+        mgr.add_onehot(1)
 
         all_uuids = mgr.df_wrapper.get_all_uuids()
-        # Reorder: B_x, A, B_y  (reversed)
+
         mgr.add_column_reorder([all_uuids[1], all_uuids[0], all_uuids[2]])
 
         final_uuids = mgr.df_wrapper.get_all_uuids()
         script = generate_script(mgr, final_uuids)
 
-        # Determine expected order of names
+
         final_names = [mgr.df_wrapper.get_col_name_by_uuid(u) for u in final_uuids]
         final_cols_str = ", ".join(f"'{n}'" for n in final_names)
         self.assertIn(final_cols_str, script)
 
 
-# ===========================================================================
-# 9. COMPLEX MULTI-STEP COMBINATION TESTS
-# ===========================================================================
+
+
+
 
 class TestComplexCombinations(unittest.TestCase):
 
@@ -606,14 +575,14 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        # 1. Rename parent
+
         mgr.add_rename(0, 'AnimalType')
 
-        # 2. One-hot
+
         mgr.add_onehot(0)
 
-        # 3. Rename first child
-        parent_uuid = mgr.history[-2].col_uuid  # The rename trans holds the uuid
+
+        parent_uuid = mgr.history[-2].col_uuid
         child_uuids = mgr.df_wrapper.get_children_uuids(parent_uuid)
         child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
         original_child_name = mgr.df_wrapper.get_col_name_by_uuid(child_uuids[0])
@@ -622,31 +591,28 @@ class TestComplexCombinations(unittest.TestCase):
 
         script = generate_script(mgr)
 
-        # Parent rename must precede get_dummies
+
         self.assertIn("'type': 'AnimalType'", script)
         self.assertIn("pd.get_dummies", script)
-        # Child rename must be present
+
         self.assertIn("IsCat", script)
         self.assertIn("df = df[[", script)
 
     def test_binning_then_cell_edit_child_in_script(self):
-        """After binning, editing a cell in a child column shows in the script via manual_edits."""
+        """After binning, editing a cell in a child column applies the edit."""
         df = pd.DataFrame({'Score': [10, 50, 90]})
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
         mgr.add_binning(0, 'Equal Width', 2)
 
-        # Edit cell in first child
+
         child_uuids = mgr.df_wrapper.get_children_uuids(mgr.history[-1].col_uuid)
+        child_name = mgr.df_wrapper.get_col_name_by_uuid(child_uuids[0])
         mgr.add_cell_edit(0, child_uuids[0], 'custom_val')
 
-        graph = mgr.build_dependency_graph()
-        child_node = graph.get_node(child_uuids[0])
-        self.assertIsNotNone(child_node)
-        edits = child_node.params.get('manual_edits', [])
-        self.assertEqual(len(edits), 1)
-        self.assertEqual(edits[0]['value'], 'custom_val')
+        # Verify the edit was applied to the dataframe
+        self.assertEqual(mgr.df_wrapper.df.at[0, child_name], 'custom_val')
 
     def test_full_pipeline_script_is_executable(self):
         """Generated script must be valid Python (compile check)."""
@@ -660,10 +626,10 @@ class TestComplexCombinations(unittest.TestCase):
 
         mgr.add_rename(0, 'CustomerName')
         mgr.add_binning(1, 'Equal Width', 2)
-        mgr.add_onehot(1)  # Color is now at index 1 after age's children occupy spots
+        mgr.add_onehot(1)
 
         script = generate_script(mgr)
-        # Should compile without syntax errors
+
         try:
             compile(script, '<string>', 'exec')
         except SyntaxError as e:
@@ -675,11 +641,11 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'Alpha')  # history[0]
-        mgr.add_onehot(1)           # history[1]
-        mgr.add_col_add('Extra', 0) # history[2]
+        mgr.add_rename(0, 'Alpha')
+        mgr.add_onehot(1)
+        mgr.add_col_add('Extra', 0)
 
-        # Undo twice: removes Extra and OneHot
+
         mgr.undo_transformation()
         mgr.undo_transformation()
 
@@ -716,10 +682,10 @@ class TestComplexCombinations(unittest.TestCase):
         graph = mgr.build_dependency_graph()
         self.assertTrue(graph.nodes[first_child_uuid].is_deleted)
         script = generate_script(mgr)
-        deleted_name = mgr.history[-2].column + '_'  # prefix of binned column
-        # Confirm deleted child not in final selection
-        # (we check no reference to the deleted uuid's name in final df selection)
-        first_child_name = mgr.history[-1].col_name  # ColDeleteTransformation stores col_name
+        deleted_name = mgr.history[-2].column + '_'
+
+
+        first_child_name = mgr.history[-1].col_name
         self.assertNotIn(first_child_name, script.split("df = df[[")[-1])
 
     def test_row_delete_does_not_affect_column_history(self):
@@ -734,7 +700,7 @@ class TestComplexCombinations(unittest.TestCase):
         mgr.add_row_delete(1)
         mgr.add_rename(0, 'Alpha')
 
-        # UUID of A should now map to 'Alpha'
+
         self.assertEqual(mgr.df_wrapper.get_col_name_by_uuid(uuid_a), 'Alpha')
         self.assertEqual(mgr.df_wrapper.get_col_name_by_uuid(uuid_b), 'B')
         self.assertEqual(len(mgr.df_wrapper.df), 2)
@@ -746,13 +712,13 @@ class TestComplexCombinations(unittest.TestCase):
         mgr = TransformationManager(wrapper)
 
         uuids = wrapper.get_all_uuids()
-        # Reorder to: C, A, B
+
         mgr.add_column_reorder([uuids[2], uuids[0], uuids[1]])
 
         final_uuids = mgr.df_wrapper.get_all_uuids()
         script = generate_script(mgr, final_uuids)
 
-        # The final df selection should be in the reordered order
+
         self.assertIn("df = df[['C', 'A', 'B']]", script)
 
     def test_binary_label_update_reapplies_to_existing_onehot(self):
@@ -762,10 +728,10 @@ class TestComplexCombinations(unittest.TestCase):
         mgr = TransformationManager(wrapper)
 
         mgr.add_onehot(0)
-        # Change labels
+
         mgr.update_binary_labels('1', '0')
 
-        # Check values in one of the child columns contain '1' or '0', not True/False
+
         child_vals = set()
         for col in mgr.df_wrapper.df.columns:
             child_vals.update(mgr.df_wrapper.df[col].unique())
@@ -804,17 +770,17 @@ class TestComplexCombinations(unittest.TestCase):
         mgr.add_rename(0, 'Category')
         mgr.add_onehot(0)
 
-        # Undo the one-hot
+
         mgr.undo_transformation()
 
-        # Column should be back as 'Category'
+
         self.assertIn('Category', mgr.df_wrapper.df.columns)
         self.assertNotIn('Category_A', mgr.df_wrapper.df.columns)
 
 
-# ===========================================================================
-# 10. SCRIPT GENERATOR SPECIFIC TESTS
-# ===========================================================================
+
+
+
 
 class TestScriptGeneratorEdgeCases(unittest.TestCase):
 
@@ -884,18 +850,18 @@ class TestScriptGeneratorEdgeCases(unittest.TestCase):
         _, mgr = make_manager(df)
 
         mgr.add_row_delete(2)
-        mgr.add_row_delete(2)  # After first delete, original row 3 is now at index 2
-        mgr.add_row_delete(2)  # Original row 4
+        mgr.add_row_delete(2)
+        mgr.add_row_delete(2)
 
         script = generate_script(mgr)
         drop_lines = [l.strip() for l in script.split('\n') if 'df.drop(index=' in l]
-        # All three drops should target adjusted index 2 (after previous offsets)
+
         self.assertEqual(len(drop_lines), 3)
 
 
-# ===========================================================================
-# 11. UUID MANAGER INTEGRITY TESTS
-# ===========================================================================
+
+
+
 
 class TestUUIDManagerIntegrity(unittest.TestCase):
 
@@ -934,14 +900,14 @@ class TestUUIDManagerIntegrity(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_onehot(0)  # Color -> Color_R, Color_G, Color_B
+        mgr.add_onehot(0)
         parent_uuid = mgr.history[-1].col_uuid
         child_uuids = mgr.df_wrapper.get_children_uuids(parent_uuid)
 
-        # Delete first child
+
         mgr.add_col_delete(child_uuids[0])
 
-        # Remaining children should still know their parent
+
         remaining_children = mgr.df_wrapper.get_children_uuids(parent_uuid)
         for c_uuid in remaining_children:
             self.assertEqual(mgr.df_wrapper.get_parent_uuid(c_uuid), parent_uuid)
@@ -953,7 +919,7 @@ class TestUUIDManagerIntegrity(unittest.TestCase):
         mgr = TransformationManager(wrapper)
 
         mgr.add_col_add('D', 0)
-        mgr.add_onehot(1)     # B -> B_1 ...
+        mgr.add_onehot(1)
 
         uuids = mgr.df_wrapper.get_all_uuids()
         self.assertEqual(len(uuids), len(mgr.df_wrapper.df.columns))

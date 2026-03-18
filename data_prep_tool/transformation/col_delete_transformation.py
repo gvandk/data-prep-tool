@@ -3,6 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 class ColDeleteTransformation(BaseTransformation):
+    """Transformation for deleting a column."""
     def __init__(self, col_uuid: str):
         self.col_uuid = col_uuid
         self.col_name = None

@@ -1,5 +1,3 @@
-import uuid
-
 from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QPushButton, 
                              QGroupBox)
 from PyQt6.QtCore import pyqtSignal, Qt

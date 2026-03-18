@@ -3,6 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import numpy as np
 
 class CellEditTransformation(BaseTransformation):
+    """Transformation for editing a single cell value."""
     def __init__(self, row_index: int, col_uuid: str, new_value):
         self.row_index = row_index
         self.col_uuid = col_uuid
@@ -30,7 +31,7 @@ class CellEditTransformation(BaseTransformation):
                     else:
                          typed_value = float_val
                 except (ValueError, TypeError):
-                    # Keep as string for non-numeric input
+                    # Fallback to string
                     typed_value = str(self.new_value)
 
         df_wrapper.set_cell_value(self.col_uuid, self.row_index, typed_value)

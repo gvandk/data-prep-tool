@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QLineEdit, QHBoxLayout, QPushButton, QComboBox
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QIntValidator
 
 class GeneralPanel(QWidget):
@@ -48,6 +48,7 @@ class GeneralPanel(QWidget):
 
         layout.addSpacing(20)
 
+        # View config
         self.view_config_label = QLabel("View:")
         self.view_config_label.setFont(font)
         layout.addWidget(self.view_config_label)
@@ -65,6 +66,7 @@ class GeneralPanel(QWidget):
 
         layout.addSpacing(20)
 
+        # Add row/column
         self.add_config_label = QLabel("Add Row / Column:")
         self.add_config_label.setFont(font)
         layout.addWidget(self.add_config_label)
@@ -94,9 +96,11 @@ class GeneralPanel(QWidget):
         self.add_col_btn.clicked.connect(lambda: self.add_col_requested.emit(self.default_value_input.text()))
 
     def on_values_changed(self):
+        """Handle changes in binary value labels and emit signal."""
         self.binary_values_changed.emit(self.true_input.text(), self.false_input.text())
 
     def on_view_settings_changed(self):
+        """Handle changes in view settings and emit signal."""
         max_rows_text = self.max_rows_input.text().strip()
         if not max_rows_text:
             return

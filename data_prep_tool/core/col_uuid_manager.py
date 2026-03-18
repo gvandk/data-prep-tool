@@ -13,14 +13,14 @@ class ColUUIDManager:
     def initialize_from_df(self, df: pd.DataFrame):
         """Initialize UUID mappings from a DataFrame's columns."""
 
-        #reset existing mappings
+        # Reset existing mappings
         self.uuid_to_name.clear()
         self.name_to_uuid.clear()
         self.parent_map.clear()
         self.children_map.clear()
         self.ghost_parent_names.clear()
 
-        #fill mapping dictionaries
+        # Fill mapping dictionaries
         for col in df.columns:
             col_uuid = str(uuid.uuid4())
             self.uuid_to_name[col_uuid] = col
@@ -98,7 +98,7 @@ class ColUUIDManager:
         if parent_uuid is None:
             return None
         
-        #when parent column is removed, check ghost map
+        # When parent column is removed, check ghost map
         if parent_uuid in self.uuid_to_name:
             return self.uuid_to_name.get(parent_uuid)
         return self.ghost_parent_names.get(parent_uuid)
@@ -114,11 +114,11 @@ class ColUUIDManager:
     def remove_column(self, col_uuid: str):
         """Remove a column and its mappings. Keep in mind that if a column is a parent, it will remain in relationship mappings."""
         
-        #remove from uuid/name mappings
+        # Remove from uuid/name mappings
         if col_uuid in self.uuid_to_name:
             col_name = self.uuid_to_name[col_uuid]
 
-            #if parent, store name in ghost map
+            # If parent, store name in ghost map
             if col_uuid in self.children_map:
                 self.ghost_parent_names[col_uuid] = col_name
             
@@ -127,27 +127,26 @@ class ColUUIDManager:
         else:
             return
 
-        #cleanup if this was a child
+        # Cleanup if this was a child
         if col_uuid in self.parent_map:
             parent_uuid = self.parent_map[col_uuid]
             if parent_uuid in self.children_map:
                 self.children_map[parent_uuid].remove(col_uuid)
-                #cleanup mapping if no more children
+                #  Cleanup mapping if no more children
                 if self.children_map[parent_uuid] == []:
                     del self.children_map[parent_uuid]
             del self.parent_map[col_uuid]
 
     def restore_parent(self, parent_uuid:str, parent_name: str):
         """Restore parent column and remove child column mappings."""
-        # Restore basic mappings even if children map entry is gone (e.g. manually cleaned up)
         self.uuid_to_name[parent_uuid] = parent_name
         self.name_to_uuid[parent_name] = parent_uuid
 
-        #cleanup ghost map
+        # Cleanup ghost map
         if parent_uuid in self.ghost_parent_names:
             del self.ghost_parent_names[parent_uuid]
 
-        #remove child mappings
+        # Remove child mappings
         children_uuids = self.get_children_uuids(parent_uuid).copy()
         for child_uuid in children_uuids:
             self.remove_column(child_uuid)

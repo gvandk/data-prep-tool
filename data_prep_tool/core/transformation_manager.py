@@ -15,6 +15,7 @@ import pandas as pd
 from PyQt6.QtWidgets import QApplication
 
 class TransformationManager:
+    """Manages the application of transformations to the DataFrame, along with undo/redo functionality and dependency tracking."""
     def __init__(self, df_wrapper: DataFrameWrapper):
         self.df_wrapper = df_wrapper
         self.history = []
@@ -33,18 +34,16 @@ class TransformationManager:
         return self.df_wrapper.df
     
     def update_binary_labels(self, true_val, false_val):
+        """Updates the global binary labels for one-hot encoding and binning transformations, and re-applies history to reflect changes."""
         self.binary_true = true_val
         self.binary_false = false_val
         
-        # We need to re-apply history with new settings
-        # Strategy: Undo everything, update objects, apply everything
-        
+        # We need to re-apply history with new settings -> Undo everything, update objects, apply everything
         temp_history = []
         while self.history:
-            # Pop and undo
             trans = self.history.pop()
             self.df_wrapper = trans.undo(self.df_wrapper)
-            # Insert at beginning of temp list to preserve order (Stack logic)
+            # Insert at beginning of temp list to preserve order
             temp_history.insert(0, trans)
             
         # Update settings
@@ -66,13 +65,11 @@ class TransformationManager:
         self.redo.clear()
     
     def add_onehot(self, col_index):
-        # Pass current global settings
         self.history.append(oneHotEncodeTransformation(col_index, self.binary_true, self.binary_false))
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
 
     def add_binning(self, col_index: int, strategy: str, n_bins: int, cutoffs: list = None):
-        # Pass current global settings
         self.history.append(BinningTransformation(col_index, strategy, n_bins, cutoffs, self.binary_true, self.binary_false))
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
@@ -108,6 +105,7 @@ class TransformationManager:
         self.redo.clear()
 
     def undo_transformation(self):
+        """Undoes the last transformation, if possible."""
         if not self.history:
             QApplication.beep()
             return
@@ -115,6 +113,7 @@ class TransformationManager:
         self.redo.append(self.history.pop())
 
     def redo_transformation(self):
+        """Redoes the last undone transformation, if possible."""
         if not self.redo:
             QApplication.beep()
             return
@@ -123,6 +122,7 @@ class TransformationManager:
         self.history.append(transformation)
 
     def build_dependency_graph(self) -> DependencyGraph:
+            """Constructs a dependency graph based on the initial state and the history of transformations applied."""
             graph = DependencyGraph()
             for uuid, original_name in self.initial_state:
                 graph.register_load(uuid, original_name)
@@ -136,7 +136,6 @@ class TransformationManager:
                     child_uuids = transformation.child_uuids
                     child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
                     
-                    # Robustly try to find original names
                     orig_names = getattr(transformation, 'created_names', [])
                     if not orig_names and getattr(transformation, 'dummies', None) is not None:
                         orig_names = list(transformation.dummies.columns)
@@ -160,7 +159,6 @@ class TransformationManager:
                     child_uuids = transformation.child_uuids
                     child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
                     
-                    # Robustly try to find original names
                     orig_names = getattr(transformation, 'created_names', [])
                     if not orig_names and getattr(transformation, 'dummies', None) is not None:
                         orig_names = list(transformation.dummies.columns)

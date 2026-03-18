@@ -2,6 +2,7 @@ from .base_transformation import BaseTransformation
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 
 class ColAddTransformation(BaseTransformation):
+    """Transformation for adding a new column with a default value."""
     def __init__(self, col_name: str, default_value):
         self.col_name = col_name
         self.default_value = default_value

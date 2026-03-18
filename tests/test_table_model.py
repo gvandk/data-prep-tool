@@ -21,6 +21,6 @@ class TestTableModel(unittest.TestCase):
         index = self.model.index(0, 0)
         changed = self.model.setData(index, 99, role=Qt.ItemDataRole.EditRole)
         self.assertFalse(changed)
-        
-        # Verify data was not updated
+
+
         self.assertEqual(self.wrapper.df.at[0, 'A'], 1)

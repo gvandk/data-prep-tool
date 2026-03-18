@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Set
+from typing import List, Dict, Optional, Any
 
 @dataclass
 class GraphNode:
+    """Represents a node in the dependency graph for transformations."""
     uuid: str
     current_name: str
     operation: str
@@ -11,6 +12,7 @@ class GraphNode:
     is_deleted: bool = False
 
 class DependencyGraph:
+    """Manages the dependency graph of transformations applied to the DataFrame."""
     def __init__(self):
         self.nodes: Dict[str, GraphNode] = {}
 

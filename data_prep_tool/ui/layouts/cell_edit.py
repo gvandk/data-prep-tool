@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow, QFileDialog, QHBoxLayout, QWidget, QMenuBar, QLabel, QVBoxLayout, QLineEdit, QPushButton, QStackedLayout
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 from PyQt6.QtCore import pyqtSignal
 
 class CellEdit(QHBoxLayout):

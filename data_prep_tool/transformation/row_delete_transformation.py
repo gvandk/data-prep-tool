@@ -3,6 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 import pandas as pd
 
 class RowDeleteTransformation(BaseTransformation):
+    """Transformation for deleting a row."""
     def __init__(self, row_index: int):
         self.row_index = row_index
         self.deleted_row = None

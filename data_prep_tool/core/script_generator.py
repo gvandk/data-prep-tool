@@ -10,12 +10,14 @@ class ScriptGenerator:
         return repr(str(value))
 
     def generate_script(self, final_col_uuids: List[str] = None) -> str:
+        """Generate a Python script that reproduces the transformations represented in the dependency graph."""
         active_nodes = self.graph.get_active_nodes()
 
         selected_final_nodes: List[GraphNode] = []
         if final_col_uuids:
             for uuid in final_col_uuids:
                 node = self.graph.get_node(uuid)
+                # Only include if the node is active and not a row/cell operation
                 if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT"):
                     selected_final_nodes.append(node)
 
@@ -41,6 +43,7 @@ class ScriptGenerator:
             ""
         ]
 
+        # In case no edits happend, just save the csv
         if not active_nodes:
             lines.append("df.to_csv(output_path, index=False)")
             return "\n".join(lines)
@@ -50,6 +53,7 @@ class ScriptGenerator:
         visited: Set[str] = set()
 
         def trace(uuid: str):
+            """Depth-first trace to ensure parents come before children in the script."""
             if uuid in visited: return
             if uuid not in self.graph.nodes: return
             node = self.graph.nodes[uuid]
@@ -61,7 +65,7 @@ class ScriptGenerator:
         for node in active_nodes:
             trace(node.uuid)
 
-        # Optimization: Coalesce consecutive CELL_EDIT operations on same cell
+        # Coalesce consecutive CELL_EDIT operations on same cell to reduce redundant edits in the script
         optimized_steps = []
         for node in sorted_steps:
              if node.operation == "CELL_EDIT" and optimized_steps:
@@ -81,10 +85,10 @@ class ScriptGenerator:
         processed_delete_offset = 0
 
         for node in sorted_steps:
-            print(node.operation, flush=True)
             if node.operation == "LOAD":
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
+                    lines.append(f"# Rename column: {src} to {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
             
             elif node.operation == "CELL_EDIT":
@@ -93,20 +97,23 @@ class ScriptGenerator:
                 col_name = target_node.current_name
                 row = node.params.get('row_index')
                 val = node.params.get('value')
+                lines.append(f"# Edit cell: {col_name} at row {row} to {repr(val)}")
                 lines.append(f"df.at[{row}, {self._s(col_name)}] = {repr(val)}")
             
             elif node.operation == "ROW_DELETE":
                     adjusted = node.params.get('row_index') - processed_delete_offset
+                    lines.append(f"# Delete row at index {adjusted} (original index {node.params.get('row_index')})")
                     lines.append(f"df = df.drop(index={adjusted}).reset_index(drop=True)")
                     processed_delete_offset += 1
 
             elif node.operation == "ROW_ADD":
                 default = node.params.get('default_value', '')
+                lines.append(f"# Add new row with {repr(default)}")
                 lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])]).reset_index(drop=True)")
 
             elif node.operation == "COL_ADD":
                 default = node.params.get('default_value', '')
-                lines.append(f"# Add column: {node.current_name}")
+                lines.append(f"# Add column: {node.current_name} with default value {repr(default)}")
                 lines.append(f"df[{self._s(node.current_name)}] = {repr(default)}")
 
             elif node.operation == "ONE_HOT":
@@ -132,8 +139,7 @@ class ScriptGenerator:
                 if parent_uuid not in processed_binning_parents:
                     parent_node = self.graph.get_node(parent_uuid)
                     base_name = node.params.get("pre_binning_name") or parent_node.current_name
-                    #binned_name = node.current_name # We now generate multiple columns usually
-                    
+
                     p_src = parent_node.params.get('source_name')
                     if p_src and p_src != base_name:
                         lines.append(f"df.rename(columns={{{self._s(p_src)}: {self._s(base_name)}}}, inplace=True)")
@@ -149,7 +155,6 @@ class ScriptGenerator:
                     
                     if strategy == "Ordinal":
                          lines.append(f"binned_codes = pd.cut(numeric_vals, bins={n}, labels=False)")
-                         # Generated cumulative logic
                          lines.append(f"dummies = pd.DataFrame(index=df.index)")
                          lines.append(f"for i in range({n}):")
                          col_expr = f"{{'{base_name}'}}_{{i}}" # f-string inside f-string needs escaping
@@ -160,7 +165,7 @@ class ScriptGenerator:
                     elif strategy in ["Equal Frequency", "Equinominal"]:
                         lines.append(f"binned = pd.qcut(numeric_vals, q={n}, duplicates='drop')")
                         lines.append(f"dummies = pd.get_dummies(binned, prefix={self._s(base_name)})")
-                    else: # Equal Width default
+                    else: # Equal Width as default
                         lines.append(f"binned = pd.cut(numeric_vals, bins={n})")
                         lines.append(f"dummies = pd.get_dummies(binned, prefix={self._s(base_name)})")
                     
@@ -174,7 +179,7 @@ class ScriptGenerator:
                 if src and src != node.current_name:
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
 
-        # --- Column selection ---
+        # Final column order and selection
         if final_col_uuids:
             final_cols = [n.current_name for n in selected_final_nodes]
         else:

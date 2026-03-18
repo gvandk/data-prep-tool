@@ -3,7 +3,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from typing import List
 
 class ColumnReorderTransformation(BaseTransformation):
-
+    """Transformation for reordering columns."""
     def __init__(self, new_order: List[str]):
         self.new_order = new_order
         self.old_order = None
@@ -11,6 +11,7 @@ class ColumnReorderTransformation(BaseTransformation):
         self.old_order_names = None
 
     def _resolve_order_from_names(self, df_wrapper: DataFrameWrapper, names: List[str], fallback_order: List[str]):
+        """Resolve a list of UUIDs based on column names, with a fallback to a provided order of UUIDs."""
         resolved_order = []
         seen = set()
 
