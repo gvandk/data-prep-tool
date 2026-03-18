@@ -34,33 +34,46 @@ class TransformationManager:
         return self.df_wrapper.df
     
     def update_binary_labels(self, true_val, false_val):
-        """Updates the global binary labels for one-hot encoding and binning transformations, and re-applies history to reflect changes."""
+        """Update binary labels for one-hot/binning columns in place using UUID-targeted relabeling."""
         self.binary_true = true_val
         self.binary_false = false_val
-        
-        # We need to re-apply history with new settings -> Undo everything, update objects, apply everything
-        temp_history = []
-        while self.history:
-            trans = self.history.pop()
-            self.df_wrapper = trans.undo(self.df_wrapper)
-            # Insert at beginning of temp list to preserve order
-            temp_history.insert(0, trans)
-            
-        # Update settings
-        for trans in temp_history:
-            if isinstance(trans, (oneHotEncodeTransformation, BinningTransformation)):
-                trans.true_label = true_val
-                trans.false_label = false_val
-        
-        # Re-apply
-        for trans in temp_history:
-            self.history.append(trans)
-            self.df_wrapper = trans.apply(self.df_wrapper)
-        
-        self.redo.clear() 
 
-    def add_rename(self, col_index, new_name):
-        self.history.append(ColumnRenameTransformation(col_index, new_name))
+        if self.df_wrapper.df is None:
+            return
+
+        for trans in self.history:
+            if not isinstance(trans, (oneHotEncodeTransformation, BinningTransformation)):
+                continue
+
+            old_true = trans.true_label
+            old_false = trans.false_label
+
+            trans.true_label = true_val
+            trans.false_label = false_val
+
+            child_uuids = getattr(trans, "child_uuids", None) or []
+            if not child_uuids:
+                continue
+
+            replace_map = {
+                old_true: true_val,
+                old_false: false_val,
+                True: true_val,
+                False: false_val,
+                1: true_val,
+                0: false_val,
+            }
+
+            for child_uuid in child_uuids:
+                child_name = self.df_wrapper.get_col_name_by_uuid(child_uuid)
+                if not child_name or child_name not in self.df_wrapper.df.columns:
+                    continue
+                self.df_wrapper.df[child_name] = self.df_wrapper.df[child_name].replace(replace_map)
+
+        self.redo.clear()
+
+    def add_rename(self, col_uuid, new_name):
+        self.history.append(ColumnRenameTransformation(col_uuid, new_name))
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
     
@@ -133,12 +146,22 @@ class TransformationManager:
 
                 elif isinstance(transformation, oneHotEncodeTransformation):
                     parent_uuid = transformation.col_uuid
-                    child_uuids = transformation.child_uuids
-                    child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
+                    child_uuids = transformation.child_uuids or []
+                    if not child_uuids:
+                        continue
                     
                     orig_names = getattr(transformation, 'created_names', [])
                     if not orig_names and getattr(transformation, 'dummies', None) is not None:
                         orig_names = list(transformation.dummies.columns)
+
+                    child_names = []
+                    for i, child_uuid in enumerate(child_uuids):
+                        child_name = self.df_wrapper.get_col_name_by_uuid(child_uuid)
+                        if not child_name and i < len(orig_names):
+                            child_name = orig_names[i]
+                        if not child_name:
+                            child_name = f"unnamed_child_{i}"
+                        child_names.append(child_name)
                     
                     if not orig_names:
                         orig_names = child_names
@@ -156,12 +179,22 @@ class TransformationManager:
 
                 elif isinstance(transformation, BinningTransformation):
                     parent_uuid = transformation.col_uuid
-                    child_uuids = transformation.child_uuids
-                    child_names = [self.df_wrapper.get_col_name_by_uuid(u) for u in child_uuids]
+                    child_uuids = transformation.child_uuids or []
+                    if not child_uuids:
+                        continue
                     
                     orig_names = getattr(transformation, 'created_names', [])
                     if not orig_names and getattr(transformation, 'dummies', None) is not None:
                         orig_names = list(transformation.dummies.columns)
+
+                    child_names = []
+                    for i, child_uuid in enumerate(child_uuids):
+                        child_name = self.df_wrapper.get_col_name_by_uuid(child_uuid)
+                        if not child_name and i < len(orig_names):
+                            child_name = orig_names[i]
+                        if not child_name:
+                            child_name = f"unnamed_child_{i}"
+                        child_names.append(child_name)
                     
                     if not orig_names:
                         orig_names = child_names

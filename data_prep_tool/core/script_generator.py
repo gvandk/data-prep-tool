@@ -85,41 +85,51 @@ class ScriptGenerator:
         processed_delete_offset = 0
 
         for node in sorted_steps:
+            print(node.operation, flush=True)
             if node.operation == "LOAD":
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
                     lines.append(f"# Rename column: {src} to {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
+                    lines.append("")
             
             elif node.operation == "CELL_EDIT":
                 target_uuid = node.params.get('target_col_uuid')
                 target_node = self.graph.get_node(target_uuid)
+                if target_node is None:
+                    continue
                 col_name = target_node.current_name
                 row = node.params.get('row_index')
                 val = node.params.get('value')
                 lines.append(f"# Edit cell: {col_name} at row {row} to {repr(val)}")
                 lines.append(f"df.at[{row}, {self._s(col_name)}] = {repr(val)}")
+                lines.append("")
             
             elif node.operation == "ROW_DELETE":
                     adjusted = node.params.get('row_index') - processed_delete_offset
                     lines.append(f"# Delete row at index {adjusted} (original index {node.params.get('row_index')})")
                     lines.append(f"df = df.drop(index={adjusted}).reset_index(drop=True)")
+                    lines.append("")
                     processed_delete_offset += 1
 
             elif node.operation == "ROW_ADD":
                 default = node.params.get('default_value', '')
                 lines.append(f"# Add new row with {repr(default)}")
                 lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])]).reset_index(drop=True)")
+                lines.append("")
 
             elif node.operation == "COL_ADD":
                 default = node.params.get('default_value', '')
                 lines.append(f"# Add column: {node.current_name} with default value {repr(default)}")
                 lines.append(f"df[{self._s(node.current_name)}] = {repr(default)}")
+                lines.append("")
 
             elif node.operation == "ONE_HOT":
                 parent_uuid = node.parents[0]
                 if parent_uuid not in processed_one_hot_parents:
                     parent_node = self.graph.get_node(parent_uuid)
+                    if parent_node is None:
+                        continue
                     parent_name = parent_node.current_name
                     prefix = node.params.get('prefix', parent_name)
                     if prefix == "...": prefix = parent_name
@@ -129,15 +139,20 @@ class ScriptGenerator:
                     lines.append(f"dummies = pd.get_dummies(pd.Categorical(df[{self._s(parent_name)}], categories=list(pd.unique(df[{self._s(parent_name)}]))), prefix={self._s(prefix)})")
                     lines.append(f"dummies = dummies.replace({{True: {self._s(t_val)}, 1: {self._s(t_val)}, False: {self._s(f_val)}, 0: {self._s(f_val)}}})")
                     lines.append(f"df = pd.concat([df, dummies], axis=1)")
+                    lines.append("")
                     processed_one_hot_parents.add(parent_uuid)
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
+                    lines.append(f"# Rename one-hot column: {src} to {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
+                lines.append("")
 
             elif node.operation == "BINNING":
                 parent_uuid = node.parents[0]
                 if parent_uuid not in processed_binning_parents:
                     parent_node = self.graph.get_node(parent_uuid)
+                    if parent_node is None:
+                        continue
                     base_name = node.params.get("pre_binning_name") or parent_node.current_name
 
                     p_src = parent_node.params.get('source_name')
@@ -173,19 +188,25 @@ class ScriptGenerator:
                     lines.append(f"df = pd.concat([df, dummies], axis=1)")
 
                     lines.append(f"df.drop(columns=[{self._s(base_name)}], inplace=True)")
+                    lines.append("")
                     processed_binning_parents.add(parent_uuid)
                 
                 src = node.params.get('source_name')
                 if src and src != node.current_name:
+                    lines.append(f"# Rename binned column: {src} to {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
+                lines.append("")
 
         # Final column order and selection
         if final_col_uuids:
-            final_cols = [n.current_name for n in selected_final_nodes]
+            final_cols = [n.current_name for n in selected_final_nodes if n.current_name]
         else:
-            final_cols = [n.current_name for n in active_nodes if n.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT")]
+            final_cols = [
+                n.current_name
+                for n in active_nodes
+                if n.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT") and n.current_name
+            ]
         final_cols_str = ", ".join(self._s(col) for col in final_cols)
-        lines.append("")
         lines.append(f"# Select and order final columns")
         lines.append(f"df = df[[{final_cols_str}]]")
         lines.append("df = df.reset_index(drop=True)")

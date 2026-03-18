@@ -29,8 +29,8 @@ class TestRenameEdgeCases(unittest.TestCase):
     def test_rename_to_same_name_is_noop_in_script(self):
         """Renaming A -> A should not emit a rename line."""
         df = pd.DataFrame({'A': [1, 2]})
-        _, mgr = make_manager(df)
-        mgr.add_rename(0, 'A')
+        wrapper, mgr = make_manager(df)
+        mgr.add_rename(wrapper.get_uuid_by_name('A'), 'A')
         script = generate_script(mgr)
 
         self.assertNotIn("df.rename(columns={'A': 'A'}", script)
@@ -39,9 +39,10 @@ class TestRenameEdgeCases(unittest.TestCase):
     def test_rename_chain_collapses_to_single_rename(self):
         """A -> B -> C should produce only one rename (A -> C), not two."""
         df = pd.DataFrame({'A': [1]})
-        _, mgr = make_manager(df)
-        mgr.add_rename(0, 'B')
-        mgr.add_rename(0, 'C')
+        wrapper, mgr = make_manager(df)
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'B')
+        mgr.add_rename(uuid_a, 'C')
         script = generate_script(mgr)
         self.assertIn("'A': 'C'", script)
         self.assertNotIn("'A': 'B'", script)
@@ -55,9 +56,9 @@ class TestRenameEdgeCases(unittest.TestCase):
         uuid_a = wrapper.get_uuid_by_name('A')
         uuid_b = wrapper.get_uuid_by_name('B')
 
-        mgr.add_rename(0, 'Temp')
-        mgr.add_rename(1, 'A')
-        mgr.add_rename(0, 'B')
+        mgr.add_rename(uuid_a, 'Temp')
+        mgr.add_rename(uuid_b, 'A')
+        mgr.add_rename(uuid_a, 'B')
 
         graph = mgr.build_dependency_graph()
         self.assertEqual(graph.nodes[uuid_a].current_name, 'B')
@@ -75,9 +76,8 @@ class TestRenameEdgeCases(unittest.TestCase):
 
         parent_uuid = mgr.history[-1].col_uuid
         child_uuids = mgr.df_wrapper.get_children_uuids(parent_uuid)
-        child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
 
-        mgr.add_rename(child_idx, 'IsRed')
+        mgr.add_rename(child_uuids[0], 'IsRed')
 
         script = generate_script(mgr)
         self.assertIn('IsRed', script)
@@ -86,8 +86,8 @@ class TestRenameEdgeCases(unittest.TestCase):
     def test_undo_rename_restores_original_name(self):
         """Undoing a rename restores the original name in the wrapper and subsequent script."""
         df = pd.DataFrame({'Original': [1, 2]})
-        _, mgr = make_manager(df)
-        mgr.add_rename(0, 'Changed')
+        wrapper, mgr = make_manager(df)
+        mgr.add_rename(wrapper.get_uuid_by_name('Original'), 'Changed')
         mgr.undo_transformation()
 
         self.assertIn('Original', mgr.df_wrapper.df.columns)
@@ -110,7 +110,8 @@ class TestOneHotEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'Category')
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'Category')
         mgr.add_onehot(0)
 
         script = generate_script(mgr)
@@ -198,6 +199,25 @@ class TestOneHotEdgeCases(unittest.TestCase):
         self.assertIn("'1'", script)
         self.assertIn("'0'", script)
 
+    def test_onehot_then_delete_children_graph_and_script_do_not_crash(self):
+        """Deleting one-hot child columns later should not break graph/script generation."""
+        df = pd.DataFrame({'Color': ['Red', 'Blue', 'Red']})
+        wrapper = DataFrameWrapper(df)
+        mgr = TransformationManager(wrapper)
+
+        mgr.add_onehot(0)
+        parent_uuid = mgr.history[-1].col_uuid
+        child_uuids = list(mgr.df_wrapper.get_children_uuids(parent_uuid) or [])
+
+        for child_uuid in child_uuids:
+            mgr.add_col_delete(child_uuid)
+
+        graph = mgr.build_dependency_graph()
+        script = generate_script(mgr)
+
+        self.assertIsNotNone(graph)
+        self.assertIn("df.to_csv(output_path, index=False)", script)
+
 
 
 
@@ -215,10 +235,8 @@ class TestBinningEdgeCases(unittest.TestCase):
 
 
         child_uuids = mgr.df_wrapper.get_children_uuids(mgr.history[-1].col_uuid)
-        child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
-        original_child_name = mgr.df_wrapper.get_col_name_by_uuid(child_uuids[0])
 
-        mgr.add_rename(child_idx, 'LowScore')
+        mgr.add_rename(child_uuids[0], 'LowScore')
 
         script = generate_script(mgr)
         self.assertIn("LowScore", script)
@@ -227,9 +245,10 @@ class TestBinningEdgeCases(unittest.TestCase):
     def test_rename_before_binning_uses_renamed_column(self):
         """Renaming a column before binning it must use the new name in the script."""
         df = pd.DataFrame({'A': [1, 5, 10, 15, 20]})
-        _, mgr = make_manager(df)
+        wrapper, mgr = make_manager(df)
 
-        mgr.add_rename(0, 'Score')
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'Score')
         mgr.add_binning(0, 'Equal Width', 2)
 
         script = generate_script(mgr)
@@ -311,9 +330,9 @@ class TestCellEditEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'NewName')
-        uuid = wrapper.get_uuid_by_name('NewName')
-        mgr.add_cell_edit(0, uuid, 999)
+        uuid_old = wrapper.get_uuid_by_name('OldName')
+        mgr.add_rename(uuid_old, 'NewName')
+        mgr.add_cell_edit(0, uuid_old, 999)
 
         self.assertEqual(mgr.df_wrapper.df.at[0, 'NewName'], 999)
 
@@ -408,9 +427,9 @@ class TestColDeleteEdgeCases(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'NewName')
-        uuid = wrapper.get_uuid_by_name('NewName')
-        mgr.add_col_delete(uuid)
+        uuid_old = wrapper.get_uuid_by_name('OldName')
+        mgr.add_rename(uuid_old, 'NewName')
+        mgr.add_col_delete(uuid_old)
 
         script = generate_script(mgr)
         self.assertNotIn("'OldName'", script)
@@ -575,8 +594,8 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-
-        mgr.add_rename(0, 'AnimalType')
+        uuid_type = wrapper.get_uuid_by_name('type')
+        mgr.add_rename(uuid_type, 'AnimalType')
 
 
         mgr.add_onehot(0)
@@ -584,10 +603,8 @@ class TestComplexCombinations(unittest.TestCase):
 
         parent_uuid = mgr.history[-2].col_uuid
         child_uuids = mgr.df_wrapper.get_children_uuids(parent_uuid)
-        child_idx = mgr.df_wrapper.get_all_uuids().index(child_uuids[0])
-        original_child_name = mgr.df_wrapper.get_col_name_by_uuid(child_uuids[0])
-
-        mgr.add_rename(child_idx, 'IsCat')
+        
+        mgr.add_rename(child_uuids[0], 'IsCat')
 
         script = generate_script(mgr)
 
@@ -624,7 +641,8 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'CustomerName')
+        uuid_id = wrapper.get_uuid_by_name('ID')
+        mgr.add_rename(uuid_id, 'CustomerName')
         mgr.add_binning(1, 'Equal Width', 2)
         mgr.add_onehot(1)
 
@@ -641,7 +659,8 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'Alpha')
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'Alpha')
         mgr.add_onehot(1)
         mgr.add_col_add('Extra', 0)
 
@@ -698,7 +717,7 @@ class TestComplexCombinations(unittest.TestCase):
         uuid_b = wrapper.get_uuid_by_name('B')
 
         mgr.add_row_delete(1)
-        mgr.add_rename(0, 'Alpha')
+        mgr.add_rename(uuid_a, 'Alpha')
 
 
         self.assertEqual(mgr.df_wrapper.get_col_name_by_uuid(uuid_a), 'Alpha')
@@ -767,7 +786,8 @@ class TestComplexCombinations(unittest.TestCase):
         wrapper = DataFrameWrapper(df)
         mgr = TransformationManager(wrapper)
 
-        mgr.add_rename(0, 'Category')
+        uuid_type = wrapper.get_uuid_by_name('Type')
+        mgr.add_rename(uuid_type, 'Category')
         mgr.add_onehot(0)
 
 

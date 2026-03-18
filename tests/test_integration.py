@@ -30,10 +30,12 @@ class TestIntegration(unittest.TestCase):
 
     def test_shell_game_renames(self):
         """Test A->Temp, B->A, Temp->B swap logic."""
+        uuid_a = self.wrapper.get_uuid_by_name('A')
+        uuid_b = self.wrapper.get_uuid_by_name('B')
 
-        self.manager.add_rename(0, 'Temp')
-        self.manager.add_rename(1, 'A')
-        self.manager.add_rename(0, 'B')
+        self.manager.add_rename(uuid_a, 'Temp')
+        self.manager.add_rename(uuid_b, 'A')
+        self.manager.add_rename(uuid_a, 'B')
 
         graph = self.manager.build_dependency_graph()
         script = ScriptGenerator(graph).generate_script()
@@ -59,8 +61,8 @@ class TestIntegration(unittest.TestCase):
 
 
         for old_name, new_name in [('Color_Red', 'is_red'), ('Color_Blue', 'is_blue')]:
-            col_idx = manager.df_wrapper.df.columns.get_loc(old_name)
-            manager.add_rename(col_idx, new_name)
+            uuid = manager.df_wrapper.get_uuid_by_name(old_name)
+            manager.add_rename(uuid, new_name)
 
         expected_order = list(manager.get_current_dataframe().columns)
 
@@ -73,6 +75,59 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(list(out_df.columns), expected_order)
         self.assertEqual(set(out_df['is_red'].unique()), {'YES', 'NO'})
         self.assertEqual(set(out_df['is_blue'].unique()), {'YES', 'NO'})
+
+    def test_repeated_binary_label_updates_after_complex_history(self):
+        """Repeated relabeling should stay responsive and consistent after complex edits."""
+        df = pd.DataFrame({
+            'Color': ['Red', 'Blue', 'Red', 'Green'],
+            'Size': ['S', 'M', 'L', 'S'],
+            'Value': [10, 20, 30, 40]
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        value_uuid = wrapper.get_uuid_by_name('Value')
+
+        manager.add_onehot(0)
+        value_idx = manager.df_wrapper.get_all_uuids().index(value_uuid)
+        manager.add_binning(value_idx, 'Equal Width', 2)
+
+        current = manager.df_wrapper.get_all_uuids()
+        manager.add_column_reorder(list(reversed(current)))
+
+        manager.add_row_add(0)
+        manager.add_row_delete(0)
+
+        manager.undo_transformation()
+        manager.redo_transformation()
+
+        manager.update_binary_labels('YES', 'NO')
+        manager.update_binary_labels('T', 'F')
+        manager.update_binary_labels('1', '0')
+
+        out_df = manager.get_current_dataframe()
+        flat_vals = set(str(v) for v in out_df.values.ravel())
+        self.assertIn('1', flat_vals)
+        self.assertIn('0', flat_vals)
+
+    def test_binary_label_update_with_deleted_encoded_child_columns(self):
+        """Relabeling remains stable when some encoded child columns were deleted."""
+        df = pd.DataFrame({'Color': ['Red', 'Blue', 'Red']})
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        manager.add_onehot(0)
+        parent_uuid = manager.history[-1].col_uuid
+        child_uuids = list(manager.df_wrapper.get_children_uuids(parent_uuid) or [])
+        manager.add_col_delete(child_uuids[0])
+
+        manager.update_binary_labels('YES', 'NO')
+        manager.update_binary_labels('ON', 'OFF')
+
+        out_df = manager.get_current_dataframe()
+        flat_vals = set(str(v) for v in out_df.values.ravel())
+        self.assertIn('ON', flat_vals)
+        self.assertIn('OFF', flat_vals)
 
     def test_binary_label_update_tolerates_missing_onehot_children(self):
         """Regression: update_binary_labels should not crash if some one-hot child columns are missing."""

@@ -17,6 +17,11 @@ from data_prep_tool.core.data_loader import load_csv
 
 class MainController:
     """Controller for the main application window, handling user interactions and coordinating between the UI and the TransformationManager."""
+    ONE_HOT_WARN_UNIQUE_THRESHOLD = 2000
+    ONE_HOT_WARN_MATRIX_CELLS_THRESHOLD = 10_000_000
+    ONE_HOT_BLOCK_UNIQUE_THRESHOLD = 5000
+    ONE_HOT_BLOCK_MATRIX_CELLS_THRESHOLD = 50_000_000
+
     def __init__(self, main_window, transformation_manager):
         self.main_window = main_window
         self.manager = transformation_manager
@@ -80,6 +85,54 @@ class MainController:
         elif input.lower() == "false":
             return False
         return input
+
+    def _confirm_one_hot_encoding(self, uuid: str) -> bool:
+        """Estimate one-hot size and ask for confirmation (or block) for very large transformations."""
+        series = self.manager.df_wrapper.get_col_data_by_uuid(uuid)
+        if series is None:
+            return False
+
+        row_count = len(series)
+        unique_count = int(series.nunique(dropna=False))
+        estimated_matrix_cells = row_count * unique_count
+
+        if (
+            unique_count > self.ONE_HOT_BLOCK_UNIQUE_THRESHOLD
+            or estimated_matrix_cells > self.ONE_HOT_BLOCK_MATRIX_CELLS_THRESHOLD
+        ):
+            QMessageBox.warning(
+                self.main_window,
+                "Encoding Too Large",
+                (
+                    "One-Hot encoding was blocked because the estimated output is too large for interactive use.\n\n"
+                    f"Rows: {row_count:,}\n"
+                    f"Unique values: {unique_count:,}\n"
+                    f"Estimated binary cells: {estimated_matrix_cells:,}\n\n"
+                    "Reduce cardinality first (e.g. cell editing/grouping) and try again."
+                ),
+            )
+            return False
+
+        if (
+            unique_count > self.ONE_HOT_WARN_UNIQUE_THRESHOLD
+            or estimated_matrix_cells > self.ONE_HOT_WARN_MATRIX_CELLS_THRESHOLD
+        ):
+            answer = QMessageBox.question(
+                self.main_window,
+                "Large One-Hot Operation",
+                (
+                    "This one-hot transformation may be very slow and can make the app unresponsive.\n\n"
+                    f"Rows: {row_count:,}\n"
+                    f"Unique values: {unique_count:,}\n"
+                    f"Estimated binary cells: {estimated_matrix_cells:,}\n\n"
+                    "Do you want to continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            return answer == QMessageBox.StandardButton.Yes
+
+        return True
 
     def on_panel_close(self):
         self.main_window.set_panel("general")
@@ -330,6 +383,9 @@ with error handling for invalid operations."""
                 all_uuids = self.manager.df_wrapper.get_all_uuids()
                 if uuid in all_uuids:
                     col_index = all_uuids.index(uuid)
+
+                    if not self._confirm_one_hot_encoding(uuid):
+                        return
                     
                     self.manager.add_onehot(col_index)
                     self.refresh_view()
@@ -363,15 +419,14 @@ with error handling for invalid operations."""
         self.model.set_error_columns([])
 
         if uuid in all_uuids:
-            col_index = all_uuids.index(uuid)
             try:
-                self.manager.add_rename(col_index, new_name)
+                self.manager.add_rename(uuid, new_name)
                 self.refresh_view()
             except ValueError:
                 # Beep and highlight duplicates
                 QApplication.beep()
                 
-                error_indices = [col_index]
+                error_indices = [all_uuids.index(uuid)]
                 # Find index of existing column with same name
                 try:
                     df_cols = self.manager.df_wrapper.df.columns

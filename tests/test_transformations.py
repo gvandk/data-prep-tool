@@ -168,7 +168,8 @@ def test_rename_basic():
     })
     wrapper = DataFrameWrapper(df)
 
-    transform = ColumnRenameTransformation(col_index=0, new_name='new_name')
+    uuid = wrapper.get_uuid_by_name('old_name')
+    transform = ColumnRenameTransformation(col_uuid=uuid, new_name='new_name')
     wrapper = transform.apply(wrapper)
 
 
@@ -185,7 +186,8 @@ def test_rename_undo():
     df = pd.DataFrame({'original': [10, 20]})
     wrapper = DataFrameWrapper(df)
 
-    transform = ColumnRenameTransformation(col_index=0, new_name='changed')
+    uuid = wrapper.get_uuid_by_name('original')
+    transform = ColumnRenameTransformation(col_uuid=uuid, new_name='changed')
     wrapper = transform.apply(wrapper)
 
     assert 'changed' in wrapper.df.columns
@@ -209,7 +211,8 @@ def test_rename_preserves_position():
     })
     wrapper = DataFrameWrapper(df)
 
-    transform = ColumnRenameTransformation(col_index=1, new_name='B_renamed')
+    uuid_b = wrapper.get_uuid_by_name('B')
+    transform = ColumnRenameTransformation(col_uuid=uuid_b, new_name='B_renamed')
     wrapper = transform.apply(wrapper)
 
 
@@ -224,15 +227,16 @@ def test_rename_multiple_sequential():
     df = pd.DataFrame({'col': [1, 2]})
     wrapper = DataFrameWrapper(df)
 
-    transform1 = ColumnRenameTransformation(col_index=0, new_name='step1')
+    uuid_col = wrapper.get_uuid_by_name('col')
+    transform1 = ColumnRenameTransformation(col_uuid=uuid_col, new_name='step1')
     wrapper = transform1.apply(wrapper)
     assert 'step1' in wrapper.df.columns
 
-    transform2 = ColumnRenameTransformation(col_index=0, new_name='step2')
+    transform2 = ColumnRenameTransformation(col_uuid=uuid_col, new_name='step2')
     wrapper = transform2.apply(wrapper)
     assert 'step2' in wrapper.df.columns
 
-    transform3 = ColumnRenameTransformation(col_index=0, new_name='final')
+    transform3 = ColumnRenameTransformation(col_uuid=uuid_col, new_name='final')
     wrapper = transform3.apply(wrapper)
     assert 'final' in wrapper.df.columns
 
@@ -249,7 +253,8 @@ def test_combined_rename_and_onehot():
     wrapper = DataFrameWrapper(df)
 
 
-    rename_transform = ColumnRenameTransformation(col_index=1, new_name='category')
+    uuid_type = wrapper.get_uuid_by_name('type')
+    rename_transform = ColumnRenameTransformation(col_uuid=uuid_type, new_name='category')
     wrapper = rename_transform.apply(wrapper)
 
 

@@ -58,12 +58,12 @@ class DataFrameWrapper:
         if existing_columns:
             raise ValueError(f"Column(s) {existing_columns} already exist. Cannot add columns with duplicate names.")
         
-        for col_name, col_data in col_dict.items():
-            # Make a copy to ensure each column has independent data
-            if hasattr(col_data, 'copy'):
-                self.df[col_name] = col_data.copy()
-            else:
-                self.df[col_name] = col_data
+        prepared_data = {
+            col_name: (col_data.copy() if hasattr(col_data, 'copy') else col_data)
+            for col_name, col_data in col_dict.items()
+        }
+        new_columns_df = pd.DataFrame(prepared_data, index=self.df.index)
+        self.df = pd.concat([self.df, new_columns_df], axis=1)
         self.uuid_manager.add_columns(list(col_dict.keys()))
 
     def remove_column(self, uuid: str):
@@ -91,12 +91,12 @@ class DataFrameWrapper:
             if existing_columns:
                 raise ValueError(f"Column(s) {existing_columns} already exist. Cannot add child columns with duplicate names.")
             
-            for col_name, col_data in new_dict.items():
-                # Make a copy to ensure each column has independent data
-                if hasattr(col_data, 'copy'):
-                    self.df[col_name] = col_data.copy()
-                else:
-                    self.df[col_name] = col_data
+            prepared_data = {
+                col_name: (col_data.copy() if hasattr(col_data, 'copy') else col_data)
+                for col_name, col_data in new_dict.items()
+            }
+            new_columns_df = pd.DataFrame(prepared_data, index=self.df.index)
+            self.df = pd.concat([self.df, new_columns_df], axis=1)
             self.uuid_manager.add_child_columns(parent_name, list(new_dict.keys()), child_uuids)
 
     def get_children_uuids(self, parent_uuid: str) -> Optional[List[str]]:

@@ -70,7 +70,11 @@ class DataFrameModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         """Returns header data for the given section, orientation, and role, including column names, row numbers, and visual cues for error columns."""
-        if self.df_wrapper is None:
+        if self.df_wrapper is None or self.df_wrapper.df is None:
+            return QVariant()
+        
+        # Bounds check for horizontal headers
+        if orientation == Qt.Orientation.Horizontal and section >= self.columnCount():
             return QVariant()
         
         if role == Qt.ItemDataRole.UserRole and orientation == Qt.Orientation.Horizontal:

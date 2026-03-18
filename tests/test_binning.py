@@ -145,8 +145,9 @@ class TestBinningIntegration(unittest.TestCase):
 
     def test_complex_flow_rename_then_bin(self):
         """Test consistency when renaming BEFORE binning."""
+        uuid_a = self.wrapper.get_uuid_by_name('A')
 
-        self.manager.add_rename(0, 'Age')
+        self.manager.add_rename(uuid_a, 'Age')
 
 
         self.manager.add_binning(0, "Equal Width", 2)

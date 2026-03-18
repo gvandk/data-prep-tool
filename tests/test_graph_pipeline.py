@@ -105,7 +105,7 @@ class TestIntegration(unittest.TestCase):
 
 
         uuid_a = self.wrapper.get_uuid_by_name('A')
-        self.manager.add_rename(0, 'Alpha')
+        self.manager.add_rename(uuid_a, 'Alpha')
 
 
 
@@ -161,8 +161,9 @@ class TestAdvancedScenarios(unittest.TestCase):
         """
         Verify that undoing an action removes it completely from the exported graph.
         """
+        uuid_a = self.wrapper.get_uuid_by_name('A')
 
-        self.manager.add_rename(0, 'Alpha')
+        self.manager.add_rename(uuid_a, 'Alpha')
 
 
         self.manager.add_onehot(1)
@@ -195,17 +196,9 @@ class TestAdvancedScenarios(unittest.TestCase):
         uuid_a = self.wrapper.get_uuid_by_name('A')
         uuid_b = self.wrapper.get_uuid_by_name('B')
 
-
-        idx_a = self.wrapper.df.columns.get_loc('A')
-        self.manager.add_rename(idx_a, 'Temp')
-
-
-        idx_b = self.wrapper.df.columns.get_loc('B')
-        self.manager.add_rename(idx_b, 'A')
-
-
-        idx_temp = self.wrapper.df.columns.get_loc('Temp')
-        self.manager.add_rename(idx_temp, 'B')
+        self.manager.add_rename(uuid_a, 'Temp')
+        self.manager.add_rename(uuid_b, 'A')
+        self.manager.add_rename(uuid_a, 'B')
 
 
         graph = self.manager.build_dependency_graph()
