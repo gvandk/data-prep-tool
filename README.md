@@ -10,23 +10,16 @@ This project was created as part of a bachelor thesis at Palacký University Olo
    ```bash
    pip install "git+https://github.com/gvandk/data-prep-tool.git"
    ```
-3. Start the app:
+3. Run the app:
    ```bash
    data-prep-tool
    ```
 
-#### Run tests
-1. Install development/test dependencies:
-   ```bash
-   pip install -e .[dev]
-   ```
-2. Run tests:
-   ```bash
-   pytest
-   ```
-
 ### Run from source
-1. Clone the repository.
+1. Clone the repository:
+```bash
+   git clone https://github.com/gvandk/data-prep-tool.git
+```
 2. Install dependencies:
    ```bash
    pip install -r requirements.txt
@@ -35,7 +28,16 @@ This project was created as part of a bachelor thesis at Palacký University Olo
    ```bash
    python -m data_prep_tool.main
    ```
-
+   
+#### Run tests
+1. Navigate into the cloned repository directory:
+```bash
+   cd data-prep-tool
+```
+2. Run the tests:
+```bash
+   pytest
+```
 ## Notes / Other
 
 - The app uses a single packaged icon file at `data_prep_tool/app_icon.png`.
