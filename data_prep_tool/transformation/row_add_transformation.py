@@ -9,7 +9,9 @@ class RowAddTransformation(BaseTransformation):
 
     def apply(self, df_wrapper: DataFrameWrapper):
         new_row = {col: self.default_value for col in df_wrapper.df.columns}
-        df_wrapper.df = pd.concat([df_wrapper.df, pd.DataFrame([new_row])]).reset_index(drop=True)
+        df_wrapper.df = pd.concat(
+            [df_wrapper.df, pd.DataFrame([new_row])], ignore_index=True
+        ).reset_index(drop=True)
         return df_wrapper
 
     def undo(self, df_wrapper: DataFrameWrapper):

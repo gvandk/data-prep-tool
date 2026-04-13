@@ -158,8 +158,8 @@ class ScriptGenerator:
                 lines.append("")
                 default = node.params.get('default_value', '')
                 lines.append(f"# Add new row with {repr(default)}")
-                lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])]).reset_index(drop=True)")
-
+                lines.append(f"df = pd.concat([df, pd.DataFrame([{{col: {repr(default)} for col in df.columns}}])], ignore_index=True).reset_index(drop=True)")
+                
             elif node.operation == "COL_ADD":
                 lines.append("")
                 default = node.params.get('default_value', '')
