@@ -15,7 +15,7 @@ import pandas as pd
 from PyQt6.QtWidgets import QApplication
 
 class TransformationManager:
-    """Manages the application of transformations to the DataFrame, along with undo/redo functionality and dependency tracking."""
+    """Manages the application of transformations to the DataFrameWrapper, along with undo/redo functionality and dependency tracking."""
     def __init__(self, df_wrapper: DataFrameWrapper):
         self.df_wrapper = df_wrapper
         self.history = []

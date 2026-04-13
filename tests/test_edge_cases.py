@@ -122,6 +122,18 @@ class TestOneHotEdgeCases(unittest.TestCase):
         self.assertLess(rename_pos, dummies_pos, "Rename must come before get_dummies")
         self.assertIn("df['Category']", script)
 
+    def test_onehot_parent_rename_emitted_once(self):
+        """Parent rename should not be duplicated around one-hot generation."""
+        df = pd.DataFrame({'A': ['x', 'y', 'x']})
+        wrapper, mgr = make_manager(df)
+
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'Category')
+        mgr.add_onehot(0)
+
+        script = generate_script(mgr)
+        self.assertEqual(script.count("df.rename(columns={'A': 'Category'}, inplace=True)"), 1)
+
     def test_onehot_column_order_preserved(self):
         """One-hot children should appear at the parent's original position."""
         df = pd.DataFrame({'A': [1], 'B': ['x', 'y'][0:1], 'C': [3]})
@@ -254,6 +266,18 @@ class TestBinningEdgeCases(unittest.TestCase):
         script = generate_script(mgr)
         self.assertIn("df['Score']", script)
         self.assertNotIn("df['A'],", script)
+
+    def test_binning_parent_rename_emitted_once(self):
+        """Parent rename should not be duplicated around binning generation."""
+        df = pd.DataFrame({'A': [1, 5, 10, 15, 20]})
+        wrapper, mgr = make_manager(df)
+
+        uuid_a = wrapper.get_uuid_by_name('A')
+        mgr.add_rename(uuid_a, 'Score')
+        mgr.add_binning(0, 'Equal Width', 2)
+
+        script = generate_script(mgr)
+        self.assertEqual(script.count("df.rename(columns={'A': 'Score'}, inplace=True)"), 1)
 
     def test_binning_undo_restores_original_data_exactly(self):
         """Undo after binning must restore the exact original data."""

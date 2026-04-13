@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import Dict, List, Set
 from .dependency_graph import DependencyGraph, GraphNode
 
 class ScriptGenerator:
@@ -12,6 +12,29 @@ class ScriptGenerator:
     def generate_script(self, final_col_uuids: List[str] = None) -> str:
         """Generate a Python script that reproduces the transformations represented in the dependency graph."""
         active_nodes = self.graph.get_active_nodes()
+        children_by_parent: Dict[str, List[GraphNode]] = {}
+        for node in self.graph.nodes.values():
+            for parent_uuid in node.parents:
+                children_by_parent.setdefault(parent_uuid, []).append(node)
+
+        transform_relevance_cache: Dict[str, bool] = {}
+
+        def has_effective_transform_descendants(uuid: str) -> bool:
+            '''Check if a node has any non-deleted transform descendants that would require it to be included in the script.'''
+            if uuid in transform_relevance_cache:
+                return transform_relevance_cache[uuid]
+
+            for child in children_by_parent.get(uuid, []):
+                # Keep parent-side edits/renames only if a transform branch still has live outputs.
+                if child.operation in ("ONE_HOT", "BINNING") and not child.is_deleted:
+                    transform_relevance_cache[uuid] = True
+                    return True
+                if has_effective_transform_descendants(child.uuid):
+                    transform_relevance_cache[uuid] = True
+                    return True
+
+            transform_relevance_cache[uuid] = False
+            return False
 
         selected_final_nodes: List[GraphNode] = []
         if final_col_uuids:
@@ -64,18 +87,50 @@ class ScriptGenerator:
         for node in active_nodes:
             trace(node.uuid)
 
-        # Coalesce consecutive CELL_EDIT operations on same cell to reduce redundant edits in the script
-        optimized_steps = []
-        for node in sorted_steps:
-             if node.operation == "CELL_EDIT" and optimized_steps:
-                last_node = optimized_steps[-1]
-                if (last_node.operation == "CELL_EDIT" and 
-                    last_node.params.get('target_col_uuid') == node.params.get('target_col_uuid') and
-                    last_node.params.get('row_index') == node.params.get('row_index')):
-                    # Replace the last edit with this newer one as it overwrites it
-                    optimized_steps[-1] = node
-                    continue
-             optimized_steps.append(node)
+        def should_skip_node(node: GraphNode) -> bool:
+            '''Determine if a node can be safely skipped because it is deleted and has no effective transform descendants.'''
+            if node.operation == "LOAD":
+                return node.is_deleted and not has_effective_transform_descendants(node.uuid)
+
+            if node.operation == "CELL_EDIT":
+                target_uuid = node.params.get('target_col_uuid')
+                target_node = self.graph.get_node(target_uuid)
+                if target_node is None:
+                    return True
+                return target_node.is_deleted and not has_effective_transform_descendants(target_uuid)
+
+            return False
+
+        # Remove nodes that are guaranteed to produce no script lines before any further optimization.
+        filtered_steps = [node for node in sorted_steps if not should_skip_node(node)]
+
+        # Coalesce contiguous CELL_EDIT blocks by keeping only the last edit per cell.
+        # This removes redundant revisits
+        optimized_steps: List[GraphNode] = []
+        pending_cell_block: List[GraphNode] = []
+
+        def flush_cell_block() -> None:
+            if not pending_cell_block:
+                return
+
+            last_by_cell: Dict[tuple, GraphNode] = {
+                (n.params.get('target_col_uuid'), n.params.get('row_index')): n
+                for n in pending_cell_block
+            }
+            for n in pending_cell_block:
+                key = (n.params.get('target_col_uuid'), n.params.get('row_index'))
+                if last_by_cell[key] is n:
+                    optimized_steps.append(n)
+            pending_cell_block.clear()
+
+        for node in filtered_steps:
+            if node.operation == "CELL_EDIT":
+                pending_cell_block.append(node)
+            else:
+                flush_cell_block()
+                optimized_steps.append(node)
+        flush_cell_block()
+
         sorted_steps = optimized_steps
 
         processed_binning_parents: Set[str] = set()
@@ -89,7 +144,8 @@ class ScriptGenerator:
                 if src and src != node.current_name:
                     lines.append("")
                     lines.append(f"# Rename column: {src} to {node.current_name}")
-                    lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
+                    lines.append(f"df.rename(columns={{{self._s(src
+                    )}: {self._s(node.current_name)}}}, inplace=True)")
             
             elif node.operation == "CELL_EDIT":
                 target_uuid = node.params.get('target_col_uuid')
@@ -152,10 +208,6 @@ class ScriptGenerator:
                         continue
                     lines.append("")
                     base_name = node.params.get("pre_binning_name") or parent_node.current_name
-
-                    p_src = parent_node.params.get('source_name')
-                    if p_src and p_src != base_name:
-                        lines.append(f"df.rename(columns={{{self._s(p_src)}: {self._s(base_name)}}}, inplace=True)")
                     
                     strategy = node.params.get("strategy")
                     n = node.params.get("n_bins")

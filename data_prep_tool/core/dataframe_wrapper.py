@@ -3,6 +3,7 @@ from typing import List, Optional
 import pandas as pd
 
 class DataFrameWrapper:
+    '''A wrapper around a pandas DataFrame that manages column UUIDs and supports transformations while maintaining the integrity of the original data.'''
     def __init__(self, df=None):
         self.df = df.copy() if df is not None else None
         self.uuid_manager = ColUUIDManager()
