@@ -36,14 +36,6 @@ class ScriptGenerator:
             transform_relevance_cache[uuid] = False
             return False
 
-        selected_final_nodes: List[GraphNode] = []
-        if final_col_uuids:
-            for uuid in final_col_uuids:
-                node = self.graph.get_node(uuid)
-                # Only include if the node is active and not a row/cell operation
-                if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT"):
-                    selected_final_nodes.append(node)
-
         lines = [
             "import pandas as pd",
             "import numpy as np",
@@ -136,8 +128,6 @@ class ScriptGenerator:
         processed_binning_parents: Set[str] = set()
         processed_one_hot_parents: Set[str] = set()
 
-        processed_delete_offset = 0
-
         for node in sorted_steps:
             if node.operation == "LOAD":
                 src = node.params.get('source_name')
@@ -161,10 +151,9 @@ class ScriptGenerator:
             
             elif node.operation == "ROW_DELETE":
                     lines.append("")
-                    adjusted = node.params.get('row_index') - processed_delete_offset
-                    lines.append(f"# Delete row at index {adjusted} (original index {node.params.get('row_index')})")
-                    lines.append(f"df = df.drop(index={adjusted}).reset_index(drop=True)")
-                    processed_delete_offset += 1
+                    row_index = node.params.get('row_index')
+                    lines.append(f"# Delete row at index {row_index}")
+                    lines.append(f"df = df.drop(index={row_index}).reset_index(drop=True)")
 
             elif node.operation == "ROW_ADD":
                 lines.append("")
@@ -245,6 +234,15 @@ class ScriptGenerator:
                     lines.append(f"# Rename binned column: {src} to {node.current_name}")
                     lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
                 
+
+        # determine final columns for final selection and ordering
+        selected_final_nodes: List[GraphNode] = []
+        if final_col_uuids:
+            for uuid in final_col_uuids:
+                node = self.graph.get_node(uuid)
+                # Only include if the node is active and not a row/cell operation, since they do not have a column output to select
+                if node and not node.is_deleted and node.operation not in ("ROW_DELETE", "ROW_ADD", "CELL_EDIT"):
+                    selected_final_nodes.append(node)
 
         # Final column order and selection
         if final_col_uuids:

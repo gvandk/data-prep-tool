@@ -130,3 +130,35 @@ class TestScriptGenerator(unittest.TestCase):
         script = self.generator.generate_script()
 
         self.assertIn("df = df[[]]", script)
+
+    def test_row_deletes_keep_action_time_indices_descending_case(self):
+        self.graph.register_load("u1", "A")
+        self.graph.register_row_delete(10)
+        self.graph.register_row_delete(3)
+
+        script = self.generator.generate_script()
+
+        drop_lines = [line.strip() for line in script.split("\n") if "df.drop(index=" in line]
+        self.assertEqual(
+            drop_lines,
+            [
+                "df = df.drop(index=10).reset_index(drop=True)",
+                "df = df.drop(index=3).reset_index(drop=True)",
+            ],
+        )
+
+    def test_row_deletes_keep_action_time_indices_repeated_zero(self):
+        self.graph.register_load("u1", "A")
+        self.graph.register_row_delete(0)
+        self.graph.register_row_delete(0)
+
+        script = self.generator.generate_script()
+
+        drop_lines = [line.strip() for line in script.split("\n") if "df.drop(index=" in line]
+        self.assertEqual(
+            drop_lines,
+            [
+                "df = df.drop(index=0).reset_index(drop=True)",
+                "df = df.drop(index=0).reset_index(drop=True)",
+            ],
+        )
