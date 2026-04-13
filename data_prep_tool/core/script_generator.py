@@ -134,8 +134,7 @@ class ScriptGenerator:
                 if src and src != node.current_name:
                     lines.append("")
                     lines.append(f"# Rename column: {src} to {node.current_name}")
-                    lines.append(f"df.rename(columns={{{self._s(src
-                    )}: {self._s(node.current_name)}}}, inplace=True)")
+                    lines.append(f"df.rename(columns={{{self._s(src)}: {self._s(node.current_name)}}}, inplace=True)")
             
             elif node.operation == "CELL_EDIT":
                 target_uuid = node.params.get('target_col_uuid')
