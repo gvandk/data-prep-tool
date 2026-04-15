@@ -1,8 +1,10 @@
 import unittest
 import pandas as pd
+import numpy as np
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from data_prep_tool.core.transformation_manager import TransformationManager
 from data_prep_tool.core.script_generator import ScriptGenerator
+from data_prep_tool.ui.main_controller import MainController
 
 class TestIntegration(unittest.TestCase):
     def setUp(self):
@@ -148,3 +150,81 @@ class TestIntegration(unittest.TestCase):
 
         out_df = manager.get_current_dataframe()
         self.assertTrue(len(out_df.columns) > 0)
+
+    def test_binary_label_update_relabels_native_boolean_columns(self):
+        """Binary relabeling must also affect non-transformed boolean columns loaded from CSV."""
+        df = pd.DataFrame({
+            'Flag': [True, False, True, None],
+            'Value': [10, 20, 30, 40],
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        manager.update_binary_labels('YES', 'NO')
+
+        out_df = manager.get_current_dataframe()
+        self.assertEqual(list(out_df['Flag'].dropna()), ['YES', 'NO', 'YES'])
+
+    def test_calculate_stats_reports_binary_counts(self):
+        """Binary stats should include true/false bucket counts for boolean-like columns."""
+        class DummyManager:
+            binary_true = 'YES'
+            binary_false = 'NO'
+
+        class DummyController:
+            pass
+
+        dummy = DummyController()
+        dummy.manager = DummyManager()
+        dummy._get_binary_counts = lambda series: MainController._get_binary_counts(dummy, series)
+
+        stats = MainController._calculate_stats(dummy, pd.Series([True, False, True, None]))
+
+        self.assertIn('Type: Binary', stats)
+        self.assertIn('YES: 2', stats)
+        self.assertIn('NO: 1', stats)
+
+    def test_binary_label_update_relabels_numpy_boolean_scalars(self):
+        """Regression: relabeling should work for NumPy bool scalars immediately after load."""
+        df = pd.DataFrame({
+            'Flag': pd.Series([np.bool_(True), np.bool_(False), np.bool_(True)], dtype=object),
+            'Value': [1, 2, 3],
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        manager.update_binary_labels('YES', 'NO')
+
+        out_df = manager.get_current_dataframe()
+        self.assertEqual(list(out_df['Flag']), ['YES', 'NO', 'YES'])
+
+    def test_build_child_column_stats_contains_parent_and_child_binary_details(self):
+        """Expanded child stats should keep parent stats and include child binary true/false counts."""
+        class DummyManager:
+            binary_true = 'YES'
+            binary_false = 'NO'
+
+        class DummyController:
+            pass
+
+        dummy = DummyController()
+        dummy.manager = DummyManager()
+        dummy._get_binary_counts = lambda series: MainController._get_binary_counts(dummy, series)
+        dummy._calculate_stats = lambda series: MainController._calculate_stats(dummy, series)
+
+        parent_series = pd.Series([10, 20, 30, 40])
+        child_series = pd.Series(['YES', 'NO', 'YES', 'NO'])
+        stats = MainController._build_child_column_stats(
+            dummy,
+            parent_name='OriginalFlag',
+            parent_series=parent_series,
+            child_name='OriginalFlag_True',
+            child_series=child_series,
+        )
+
+        self.assertIn('Parent Column (OriginalFlag)', stats)
+        self.assertIn('Expanded Column (OriginalFlag_True)', stats)
+        self.assertIn('Type: Numeric', stats)
+        self.assertIn('Type: Binary', stats)
+        self.assertIn('YES: 2', stats)
+        self.assertIn('NO: 2', stats)

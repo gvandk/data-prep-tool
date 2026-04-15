@@ -11,7 +11,9 @@ from data_prep_tool.transformation.col_add_transformation import ColAddTransform
 from .dependency_graph import DependencyGraph
 
 from typing import List, Tuple
+from numbers import Real
 import pandas as pd
+import numpy as np
 from PyQt6.QtWidgets import QApplication
 
 class TransformationManager:
@@ -32,9 +34,91 @@ class TransformationManager:
     
     def get_current_dataframe(self) -> pd.DataFrame:
         return self.df_wrapper.df
+
+    @staticmethod
+    def _coerce_binary_flag(value, true_label: str, false_label: str, old_true: str, old_false: str):
+        """Return True/False for recognized binary values, or None for unknown values."""
+        if pd.isna(value):
+            return None
+
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+
+        if isinstance(value, Real):
+            if value == 1:
+                return True
+            if value == 0:
+                return False
+
+        if isinstance(value, str):
+            token = value.strip()
+            lowered = token.casefold()
+            true_label_norm = str(true_label).strip().casefold()
+            false_label_norm = str(false_label).strip().casefold()
+            old_true_norm = str(old_true).strip().casefold()
+            old_false_norm = str(old_false).strip().casefold()
+
+            if lowered in {"true", "1"}:
+                return True
+            if lowered in {"false", "0"}:
+                return False
+
+            if lowered in {true_label_norm, old_true_norm}:
+                return True
+            if lowered in {false_label_norm, old_false_norm}:
+                return False
+
+        return None
+
+    @staticmethod
+    def _build_binary_replace_map(true_val: str, false_val: str, old_true: str, old_false: str):
+        """Build replacement map for common boolean/binary representations."""
+        return {
+            True: true_val,
+            False: false_val,
+            1: true_val,
+            0: false_val,
+            "1": true_val,
+            "0": false_val,
+            "true": true_val,
+            "false": false_val,
+            "True": true_val,
+            "False": false_val,
+            old_true: true_val,
+            old_false: false_val,
+        }
+
+    def _is_binary_like_series(self, series: pd.Series, true_val: str, false_val: str, old_true: str, old_false: str) -> bool:
+        """Detect if a series contains only boolean/binary-like values (plus nulls)."""
+        non_null = series.dropna()
+        if non_null.empty:
+            return False
+
+        has_known_binary_value = False
+        for value in non_null.unique():
+            flag = self._coerce_binary_flag(value, true_val, false_val, old_true, old_false)
+            if flag is None:
+                return False
+            has_known_binary_value = True
+
+        return has_known_binary_value
+
+    def _relabel_binary_like_columns(self, true_val: str, false_val: str, old_true: str, old_false: str):
+        """Relabel all binary-like columns, including native boolean columns loaded from CSV."""
+        if self.df_wrapper.df is None:
+            return
+
+        replace_map = self._build_binary_replace_map(true_val, false_val, old_true, old_false)
+        for col_name in self.df_wrapper.df.columns:
+            series = self.df_wrapper.df[col_name]
+            if self._is_binary_like_series(series, true_val, false_val, old_true, old_false):
+                self.df_wrapper.df[col_name] = series.replace(replace_map)
     
     def update_binary_labels(self, true_val, false_val):
         """Update binary labels for one-hot/binning columns in place using UUID-targeted relabeling."""
+        old_global_true = self.binary_true
+        old_global_false = self.binary_false
+
         self.binary_true = true_val
         self.binary_false = false_val
 
@@ -55,20 +139,15 @@ class TransformationManager:
             if not child_uuids:
                 continue
 
-            replace_map = {
-                old_true: true_val,
-                old_false: false_val,
-                True: true_val,
-                False: false_val,
-                1: true_val,
-                0: false_val,
-            }
+            replace_map = self._build_binary_replace_map(true_val, false_val, old_true, old_false)
 
             for child_uuid in child_uuids:
                 child_name = self.df_wrapper.get_col_name_by_uuid(child_uuid)
                 if not child_name or child_name not in self.df_wrapper.df.columns:
                     continue
                 self.df_wrapper.df[child_name] = self.df_wrapper.df[child_name].replace(replace_map)
+
+        self._relabel_binary_like_columns(true_val, false_val, old_global_true, old_global_false)
 
         self.redo.clear()
 

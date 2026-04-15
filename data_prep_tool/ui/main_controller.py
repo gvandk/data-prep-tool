@@ -134,6 +134,29 @@ class MainController:
 
         return True
 
+    def _supports_binning(self, series: pd.Series) -> bool:
+        """Return True if a series can be interpreted as numeric for binning."""
+        if series is None:
+            return False
+
+        sample = series.dropna()
+        if sample.empty:
+            return True
+
+        if len(sample) > 100:
+            sample = sample.head(100)
+
+        try:
+            pd.to_numeric(sample, errors='raise')
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def _update_menu_action_states(self):
+        """Enable only the menu actions that are currently possible."""
+        self.main_window.action_undo.setEnabled(bool(self.manager.history))
+        self.main_window.action_redo.setEnabled(bool(self.manager.redo))
+
     def on_panel_close(self):
         self.main_window.set_panel("general")
         self.main_window.table_view.clearSelection()
@@ -161,6 +184,12 @@ class MainController:
         try:
             new_wrapper = load_csv(file_path)
             self.manager = TransformationManager(new_wrapper)
+
+            # Preserve currently configured binary labels across loaded datasets.
+            true_label = self.main_window.general_options.true_input.text()
+            false_label = self.main_window.general_options.false_input.text()
+            self.manager.update_binary_labels(true_label, false_label)
+
             self.current_input_csv_path = file_path
             self.model.update_wrapper(self.manager.df_wrapper)
             self.main_window.set_panel("general")
@@ -250,6 +279,17 @@ with error handling for generation and execution issues."""
         total = len(series)
         nulls = series.isnull().sum()
         stats = f"Total Rows: {total}\nMissing: {nulls}\n"
+
+        binary_counts = self._get_binary_counts(series)
+        if binary_counts is not None:
+            true_count, false_count = binary_counts
+            stats += (
+                "Type: Binary\n"
+                f"{self.manager.binary_true}: {true_count}\n"
+                f"{self.manager.binary_false}: {false_count}"
+            )
+            return stats
+
         if pd.api.types.is_numeric_dtype(series):
             try:
                 d = series.describe()
@@ -260,6 +300,80 @@ with error handling for generation and execution issues."""
                 stats += f"Type: Categorical\nUnique: {series.nunique()}"
             except: stats += "Error calc stats"
         return stats
+
+    def _get_binary_counts(self, series: pd.Series):
+        """Return (true_count, false_count) when a series is binary-like, else None."""
+        if series is None:
+            return None
+
+        true_label = self.manager.binary_true
+        false_label = self.manager.binary_false
+
+        true_count = 0
+        false_count = 0
+        saw_binary_value = False
+
+        for value in series.dropna():
+            if isinstance(value, bool):
+                saw_binary_value = True
+                if value:
+                    true_count += 1
+                else:
+                    false_count += 1
+                continue
+
+            if isinstance(value, (int, float)) and value in (0, 1):
+                saw_binary_value = True
+                if value == 1:
+                    true_count += 1
+                else:
+                    false_count += 1
+                continue
+
+            if isinstance(value, str):
+                token = value.strip()
+                lowered = token.casefold()
+
+                if lowered in ("true", "1") or token == true_label:
+                    saw_binary_value = True
+                    true_count += 1
+                    continue
+
+                if lowered in ("false", "0") or token == false_label:
+                    saw_binary_value = True
+                    false_count += 1
+                    continue
+
+            return None
+
+        if not saw_binary_value:
+            return None
+        return true_count, false_count
+
+    def _build_child_column_stats(self, parent_name: str, parent_series: pd.Series, child_name: str, child_series: pd.Series) -> str:
+        """Build combined stats text for expanded child columns (parent context + child binary details)."""
+        parent_label = parent_name or "Parent"
+        child_label = child_name or "Expanded Column"
+
+        parent_stats = self._calculate_stats(parent_series)
+
+        binary_counts = self._get_binary_counts(child_series)
+        if binary_counts is not None:
+            true_count, false_count = binary_counts
+            child_stats = (
+                "Type: Binary\n"
+                f"{self.manager.binary_true}: {true_count}\n"
+                f"{self.manager.binary_false}: {false_count}"
+            )
+        else:
+            child_stats = self._calculate_stats(child_series)
+
+        return (
+            f"Parent Column ({parent_label})\n"
+            f"{parent_stats}\n\n"
+            f"Expanded Column ({child_label})\n"
+            f"{child_stats}"
+        )
 
     def on_header_clicked(self, logical_index):
         """Handle clicks on column headers to show column options, including encoding and binning settings, and update stats display."""
@@ -278,26 +392,35 @@ with error handling for generation and execution issues."""
         is_child = wrapper.uuid_manager.is_child(uuid)
         data_min = 0.0
         data_max = 100.0
-        target_series = wrapper.get_col_data_by_uuid(uuid)
+        selected_series = wrapper.get_col_data_by_uuid(uuid)
+        parent_series = selected_series
 
-        if target_series is not None and pd.api.types.is_numeric_dtype(target_series):
-             data_min = float(target_series.min())
-             data_max = float(target_series.max())
+        if selected_series is not None and pd.api.types.is_numeric_dtype(selected_series):
+             data_min = float(selected_series.min())
+             data_max = float(selected_series.max())
 
         if is_child:
              parent_uuid = wrapper.get_parent_uuid(uuid)
              for trans in reversed(self.manager.history):
                  if getattr(trans, 'col_uuid', None) == parent_uuid:
                      if hasattr(trans, 'values') and trans.values is not None:
-                         target_series = trans.values
-                         if pd.api.types.is_numeric_dtype(target_series):
-                             data_min = float(target_series.min())
-                             data_max = float(target_series.max())
+                         parent_series = trans.values
+                         if pd.api.types.is_numeric_dtype(parent_series):
+                             data_min = float(parent_series.min())
+                             data_max = float(parent_series.max())
                      break
 
-        self.main_window.column_options.set_stats(self._calculate_stats(target_series))
+        if is_child:
+            parent_name_for_stats = wrapper.uuid_manager.get_parent_name(uuid)
+            stats_text = self._build_child_column_stats(parent_name_for_stats, parent_series, col_name, selected_series)
+        else:
+            stats_text = self._calculate_stats(selected_series)
+
+        self.main_window.column_options.set_stats(stats_text)
 
         encoder_widget = self.main_window.column_options.encoder_options
+        series_for_binning = parent_series if is_child else selected_series
+        can_binning = self._supports_binning(series_for_binning)
         
         if is_child:
             parent_uuid = wrapper.get_parent_uuid(uuid)
@@ -316,9 +439,26 @@ with error handling for generation and execution issues."""
                         strategy = "One-Hot"
                         break
             
-            encoder_widget.set_current_column(parent_uuid, strategy, children_names, n_bins, parent_name, data_min, data_max)
+            encoder_widget.set_current_column(
+                parent_uuid,
+                strategy,
+                children_names,
+                n_bins,
+                parent_name,
+                data_min,
+                data_max,
+                can_one_hot=True,
+                can_binning=can_binning,
+            )
         else:
-            encoder_widget.set_current_column(uuid, "None", min_val=data_min, max_val=data_max)
+            encoder_widget.set_current_column(
+                uuid,
+                "None",
+                min_val=data_min,
+                max_val=data_max,
+                can_one_hot=True,
+                can_binning=can_binning,
+            )
 
         self.main_window.column_options.set_current_uuid(uuid)
 
@@ -555,6 +695,7 @@ with error handling for invalid operations."""
         """Refresh the table view and update stats display based on the current state of the DataFrame, 
 ensuring that the UI reflects any changes from transformations or data edits."""
         self.model.update_wrapper(self.manager.df_wrapper)
+        self._update_menu_action_states()
         has_loaded_df = self.manager.df_wrapper.df is not None
         self.main_window.show_table_placeholder(not has_loaded_df)
         row_count = 0 if not has_loaded_df else self.manager.df_wrapper.df.shape[0]

@@ -11,6 +11,9 @@ class ColumnEncoding(QWidget):
     column_binning_request = pyqtSignal(str, str, int, list)
     child_rename_request = pyqtSignal(str, str)
 
+    _ONE_HOT_OPTIONS = ["None", "One-Hot"]
+    _BINNING_OPTIONS = ["Equal Width", "Equal Frequency", "Ordinal", "Custom"]
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -20,11 +23,7 @@ class ColumnEncoding(QWidget):
         self.header_layout = QHBoxLayout()
         self.header_label = QLabel("Encoding / Binning:")
         self.encoding_combo = QComboBox()
-        self.encoding_combo.addItems([
-            "None", "One-Hot", 
-            "Equal Width", "Equal Frequency", 
-            "Ordinal", "Custom"
-        ])
+        self.encoding_combo.addItems(self._ONE_HOT_OPTIONS + self._BINNING_OPTIONS)
         self.header_layout.addWidget(self.header_label)
         self.header_layout.addWidget(self.encoding_combo)
         self.layout.addLayout(self.header_layout)
@@ -105,7 +104,25 @@ class ColumnEncoding(QWidget):
         self.encoding_combo.currentTextChanged.connect(self.on_combo_changed)
         self.bins_spin.valueChanged.connect(self.on_bins_changed)
 
-    def set_current_column(self, uuid: str, encoding: str = None, child_columns: dict = None, n_bins: int = 5, parent_name: str = "", min_val: float = 0, max_val: float = 100):
+    def _set_available_operations(self, can_one_hot: bool, can_binning: bool):
+        """Hide unsupported operations from the encoding combobox."""
+        current = self.encoding_combo.currentText()
+
+        options = ["None"]
+        if can_one_hot:
+            options.append("One-Hot")
+        if can_binning:
+            options.extend(self._BINNING_OPTIONS)
+
+        self.encoding_combo.clear()
+        self.encoding_combo.addItems(options)
+
+        if current in options:
+            self.encoding_combo.setCurrentText(current)
+        else:
+            self.encoding_combo.setCurrentText("None")
+
+    def set_current_column(self, uuid: str, encoding: str = None, child_columns: dict = None, n_bins: int = 5, parent_name: str = "", min_val: float = 0, max_val: float = 100, can_one_hot: bool = True, can_binning: bool = True):
         """Set the current column context for the encoding panel."""
         self.uuid = uuid
         self.data_min = min_val
@@ -114,12 +131,18 @@ class ColumnEncoding(QWidget):
         self.encoding_combo.blockSignals(True)
         self.bins_spin.blockSignals(True)
 
-        self.encoding_combo.setCurrentText(encoding if encoding else "None")
+        self._set_available_operations(can_one_hot=can_one_hot, can_binning=can_binning)
+
+        requested_encoding = encoding if encoding else "None"
+        available_options = [self.encoding_combo.itemText(i) for i in range(self.encoding_combo.count())]
+        effective_encoding = requested_encoding if requested_encoding in available_options else "None"
+
+        self.encoding_combo.setCurrentText(effective_encoding)
         self.bins_spin.setValue(n_bins if n_bins else 5)
 
-        is_binning = encoding in ["Equal Width", "Equal Frequency", "Ordinal", "Custom"]
-        is_onehot = encoding == "One-Hot"
-        is_custom = encoding == "Custom"
+        is_binning = effective_encoding in self._BINNING_OPTIONS
+        is_onehot = effective_encoding == "One-Hot"
+        is_custom = effective_encoding == "Custom"
 
         self.binning_config_container.setVisible(is_binning)
         
@@ -133,7 +156,7 @@ class ColumnEncoding(QWidget):
         if (is_onehot or is_binning) and child_columns:
             self.children_container.setVisible(True)
             self.children_scroll_area.setVisible(True)
-            self._populate_children(child_columns, parent_name, encoding, n_bins)
+            self._populate_children(child_columns, parent_name, effective_encoding, n_bins)
         else:
             self.children_container.setVisible(False)
             self.children_scroll_area.setVisible(False)
