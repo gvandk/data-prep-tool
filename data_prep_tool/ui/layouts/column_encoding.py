@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QComboBox, 
+from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QComboBox,
                              QFrame, QSpinBox, QDoubleSpinBox, QPushButton, QMessageBox, QScrollArea)
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
@@ -70,7 +70,18 @@ class ColumnEncoding(QWidget):
         font.setBold(True)
         self.parent_label.setFont(font)
         self.children_layout.addWidget(self.parent_label)
-        self.children_layout.addWidget(QLabel("Generated Columns:"))
+
+        self.intervals_title_label = QLabel("Ordinal Intervals:")
+        self.intervals_title_label.setVisible(False)
+        self.children_layout.addWidget(self.intervals_title_label)
+
+        self.intervals_content_label = QLabel("")
+        self.intervals_content_label.setWordWrap(True)
+        self.intervals_content_label.setVisible(False)
+        self.children_layout.addWidget(self.intervals_content_label)
+
+        self.generated_columns_label = QLabel("Generated Columns:")
+        self.children_layout.addWidget(self.generated_columns_label)
 
         self.children_scroll_area = QScrollArea()
         self.children_scroll_area.setWidgetResizable(True)
@@ -122,11 +133,12 @@ class ColumnEncoding(QWidget):
         if (is_onehot or is_binning) and child_columns:
             self.children_container.setVisible(True)
             self.children_scroll_area.setVisible(True)
-            self._populate_children(child_columns, parent_name)
+            self._populate_children(child_columns, parent_name, encoding, n_bins)
         else:
             self.children_container.setVisible(False)
             self.children_scroll_area.setVisible(False)
             self._clear_children()
+            self._clear_interval_summary()
 
         self.encoding_combo.blockSignals(False)
         self.bins_spin.blockSignals(False)
@@ -162,7 +174,7 @@ class ColumnEncoding(QWidget):
             self.edges_layout.addWidget(container)
             self._edge_widgets.append(spin)
 
-    def _populate_children(self, child_columns: dict, parent_name: str):
+    def _populate_children(self, child_columns: dict, parent_name: str, encoding: str = None, n_bins: int = 5):
         """Populate the child columns section with rename options for each generated column."""
         self._clear_children()
         
@@ -172,17 +184,59 @@ class ColumnEncoding(QWidget):
         else:
             self.parent_label.setVisible(False)
 
+        if encoding == "Ordinal":
+            self._update_ordinal_interval_summary(child_columns, n_bins)
+        else:
+            self._clear_interval_summary()
+
         for child_uuid, child_name in child_columns.items():
             rename_layout = ColumnRename()
             rename_layout.set_current_column(child_uuid, child_name)
             rename_layout.column_rename_request.connect(self.child_rename_request.emit)
             rename_layout.uuid = child_uuid 
             self.children_layout.addLayout(rename_layout)
+
+    def _clear_interval_summary(self):
+        """Hide and clear ordinal interval information when not needed."""
+        self.intervals_title_label.setVisible(False)
+        self.intervals_content_label.setVisible(False)
+        self.intervals_content_label.setText("")
+
+    def _update_ordinal_interval_summary(self, child_columns: dict, n_bins: int):
+        """Show cumulative value ranges represented by ordinal output columns."""
+        try:
+            n_bins = max(2, int(n_bins))
+        except Exception:
+            n_bins = 5
+
+        child_items = list(child_columns.items())
+        if not child_items:
+            self._clear_interval_summary()
+            return
+
+        # Keep the summary aligned with the actual number of generated child columns.
+        bin_count = min(n_bins, len(child_items))
+        try:
+            edges = np.linspace(float(self.data_min), float(self.data_max), bin_count + 1)
+        except Exception:
+            edges = np.linspace(0.0, float(bin_count), bin_count + 1)
+
+        max_edge = edges[-1]
+        summary_lines = []
+        for idx, (_, child_name) in enumerate(child_items[:bin_count]):
+            lower_edge = edges[idx]
+            summary_lines.append(
+                f"{child_name}: {lower_edge:.4f} to {max_edge:.4f} (cumulative)"
+            )
+
+        self.intervals_title_label.setVisible(True)
+        self.intervals_content_label.setText("\n".join(summary_lines))
+        self.intervals_content_label.setVisible(True)
     
     def _clear_children(self):
         """Remove all child column widgets from the layout."""
-        while self.children_layout.count() > 2:
-            item = self.children_layout.takeAt(2)
+        while self.children_layout.count() > 4:
+            item = self.children_layout.takeAt(4)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
