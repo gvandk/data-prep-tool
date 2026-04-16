@@ -1,4 +1,5 @@
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QApplication
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QApplication, QAbstractItemView
+from PyQt6.QtCore import QItemSelectionModel
 import pandas as pd
 import subprocess
 import sys
@@ -377,6 +378,9 @@ with error handling for generation and execution issues."""
 
     def on_header_clicked(self, logical_index):
         """Handle clicks on column headers to show column options, including encoding and binning settings, and update stats display."""
+        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectColumns)
+        self.main_window.table_view.selectColumn(logical_index)
+
         uuid = self.model.get_column_uuid(logical_index)
         if not uuid: return
 
@@ -538,11 +542,21 @@ with error handling for invalid operations."""
             QApplication.beep()
 
     def on_row_clicked(self, logical_index):
+        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.main_window.table_view.selectRow(logical_index)
+
         self.main_window.set_panel("row")
         self.main_window.row_options.set_row(logical_index)
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
+        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        selection_model = self.main_window.table_view.selectionModel()
+        if selection_model:
+            selection_model.setCurrentIndex(
+                index,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect,
+            )
         self.main_window.set_panel("cell")
         self._active_row_index = index.row()
         uuid = self.model.get_column_uuid(index.column())
