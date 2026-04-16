@@ -27,6 +27,8 @@ class MainController:
         self.main_window = main_window
         self.manager = transformation_manager
         self._active_row_index = -1
+        self._selected_rows = set()
+        self._last_row_clicked = None
         self._header_selected_columns = set()
         self._last_header_clicked_column = None
         self.current_input_csv_path = None
@@ -69,7 +71,7 @@ class MainController:
         cell_panel.column_rename.column_rename_request.connect(self.on_column_rename)
         cell_panel.close_request.connect(self.on_panel_close)
         # Connect row options panel signals
-        self.main_window.row_options.delete_row_requested.connect(self.on_delete_row)
+        self.main_window.row_options.delete_row_requested.connect(self.on_delete_rows)
         self.main_window.row_options.close_request.connect(self.on_panel_close)
 
         self.refresh_view()
@@ -165,9 +167,12 @@ class MainController:
         self.main_window.set_panel("general")
         self.main_window.table_view.clearSelection()
         self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._selected_rows.clear()
+        self._last_row_clicked = None
         self._header_selected_columns.clear()
         self._last_header_clicked_column = None
         self._active_row_index = -1
+        self.main_window.row_options.set_rows([])
 
     def _update_header_selection(self, logical_index: int) -> list[int]:
         """Update selected columns from a header click and return sorted selected indices."""
@@ -210,6 +215,50 @@ class MainController:
                 )
 
         return selected_columns
+
+    def _update_row_selection(self, logical_index: int) -> list[int]:
+        """Update selected rows from a row-header click and return sorted selected indices."""
+        modifiers = QApplication.keyboardModifiers()
+        is_ctrl = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        is_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        if is_shift and self._last_row_clicked is not None:
+            start = min(self._last_row_clicked, logical_index)
+            end = max(self._last_row_clicked, logical_index)
+            if not is_ctrl:
+                self._selected_rows.clear()
+            for row_index in range(start, end + 1):
+                self._selected_rows.add(row_index)
+        elif is_ctrl:
+            if logical_index in self._selected_rows:
+                self._selected_rows.remove(logical_index)
+            else:
+                self._selected_rows.add(logical_index)
+            self._last_row_clicked = logical_index
+        else:
+            self._selected_rows = {logical_index}
+            self._last_row_clicked = logical_index
+
+        if not self._selected_rows:
+            self._selected_rows = {logical_index}
+            self._last_row_clicked = logical_index
+
+        selected_rows = sorted(self._selected_rows)
+
+        selection_model = self.main_window.table_view.selectionModel()
+        model = self.main_window.table_view.model()
+        if selection_model and model and model.columnCount() > 0:
+            selection_model.clearSelection()
+            for row_index in selected_rows:
+                if row_index >= model.rowCount():
+                    continue
+                index = model.index(row_index, 0)
+                selection_model.select(
+                    index,
+                    QItemSelectionModel.SelectionFlag.Rows | QItemSelectionModel.SelectionFlag.Select,
+                )
+
+        return selected_rows
 
     def on_binary_values_changed(self, true_val, false_val):
         try:
@@ -426,6 +475,8 @@ with error handling for generation and execution issues."""
 
     def on_header_clicked(self, logical_index):
         """Handle clicks on column headers to show column options, including encoding and binning settings, and update stats display."""
+        self._selected_rows.clear()
+        self._last_row_clicked = None
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectColumns)
         self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         selected_columns = self._update_header_selection(logical_index)
@@ -623,15 +674,17 @@ with error handling for invalid operations."""
         self._header_selected_columns.clear()
         self._last_header_clicked_column = None
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.main_window.table_view.selectRow(logical_index)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        selected_rows = self._update_row_selection(logical_index)
 
         self.main_window.set_panel("row")
-        self.main_window.row_options.set_row(logical_index)
+        self.main_window.row_options.set_rows(selected_rows)
         self.main_window.table_view.setFocus()
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
+        self._selected_rows.clear()
+        self._last_row_clicked = None
         self._header_selected_columns.clear()
         self._last_header_clicked_column = None
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
@@ -728,8 +781,16 @@ with error handling for invalid operations."""
             QApplication.beep()
 
     def on_delete_row(self, row_index):
+        self.on_delete_rows([row_index])
+
+    def on_delete_rows(self, row_indices):
+        normalized_rows = sorted(set(int(index) for index in row_indices))
+        if not normalized_rows:
+            QApplication.beep()
+            return
+
         try:
-            self.manager.add_row_delete(row_index)
+            self.manager.add_row_delete_many(normalized_rows)
             self.main_window.set_panel("general")
             self.refresh_view()
         except Exception:
@@ -762,9 +823,9 @@ with error handling for invalid operations."""
             else:
                 QApplication.beep()
         elif panel == self.main_window.row_options:
-            row = self.main_window.row_options._current_row
-            if row != -1:
-                self.on_delete_row(row)
+            rows = list(self.main_window.row_options._current_rows)
+            if rows:
+                self.on_delete_rows(rows)
             else:
                 QApplication.beep()
         else:
@@ -805,8 +866,11 @@ with error handling for invalid operations."""
         """Refresh the table view and update stats display based on the current state of the DataFrame, 
 ensuring that the UI reflects any changes from transformations or data edits."""
         self.model.update_wrapper(self.manager.df_wrapper)
+        self._selected_rows.clear()
+        self._last_row_clicked = None
         self._header_selected_columns.clear()
         self._last_header_clicked_column = None
+        self.main_window.row_options.set_rows([])
         self._update_menu_action_states()
         has_loaded_df = self.manager.df_wrapper.df is not None
         self.main_window.show_table_placeholder(not has_loaded_df)

@@ -178,7 +178,14 @@ class TransformationManager:
         self.redo.clear()
 
     def add_row_delete(self, row_index: int):
-        self.history.append(RowDeleteTransformation(row_index))
+        self.add_row_delete_many([row_index])
+
+    def add_row_delete_many(self, row_indices: List[int]):
+        normalized_indices = sorted(set(int(index) for index in row_indices))
+        if not normalized_indices:
+            raise ValueError("At least one row index must be provided for deletion.")
+
+        self.history.append(RowDeleteTransformation(normalized_indices))
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
 
@@ -354,7 +361,15 @@ class TransformationManager:
                             graph.mark_deleted(source_uuid)
 
                 elif isinstance(transformation, RowDeleteTransformation):
-                    graph.register_row_delete(transformation.row_index)
+                    row_indices = getattr(transformation, "row_indices", None)
+                    if row_indices:
+                        ordered_indices = row_indices
+                        if len(row_indices) > 1:
+                            ordered_indices = sorted(row_indices, reverse=True)
+                        for row_index in ordered_indices:
+                            graph.register_row_delete(row_index)
+                    else:
+                        graph.register_row_delete(transformation.row_index)
 
                 elif isinstance(transformation, RowAddTransformation):
                     graph.register_row_add(transformation.default_value)

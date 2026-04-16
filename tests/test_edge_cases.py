@@ -466,6 +466,39 @@ class TestColDeleteEdgeCases(unittest.TestCase):
 
 class TestRowDeleteEdgeCases(unittest.TestCase):
 
+    def test_multi_row_delete_single_action_undo_redo(self):
+        """Deleting multiple selected rows should be one undoable/redoable action."""
+        df = pd.DataFrame({'A': [10, 20, 30, 40, 50]})
+        _, mgr = make_manager(df)
+
+        mgr.add_row_delete_many([1, 3])
+
+        self.assertEqual(len(mgr.history), 1)
+        self.assertEqual(list(mgr.df_wrapper.df['A']), [10, 30, 50])
+
+        mgr.undo_transformation()
+        self.assertEqual(list(mgr.df_wrapper.df['A']), [10, 20, 30, 40, 50])
+
+        mgr.redo_transformation()
+        self.assertEqual(list(mgr.df_wrapper.df['A']), [10, 30, 50])
+
+    def test_multi_row_delete_script_uses_descending_indices(self):
+        """Script output must delete higher indices first for a simultaneous multi-row delete."""
+        df = pd.DataFrame({'A': [10, 20, 30, 40, 50]})
+        _, mgr = make_manager(df)
+
+        mgr.add_row_delete_many([1, 3])
+        script = generate_script(mgr)
+
+        drop_lines = [line.strip() for line in script.split("\n") if "df.drop(index=" in line]
+        self.assertEqual(
+            drop_lines,
+            [
+                "df = df.drop(index=3).reset_index(drop=True)",
+                "df = df.drop(index=1).reset_index(drop=True)",
+            ],
+        )
+
     def test_multiple_row_deletes_adjust_indices_correctly(self):
         """Deleting row 0, then row 0 again removes original rows 0 and 1."""
         df = pd.DataFrame({'A': [10, 20, 30, 40]})

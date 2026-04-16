@@ -12,6 +12,7 @@ from data_prep_tool.ui.main_controller import MainController
 from data_prep_tool.ui.main_window import MainWindow
 from data_prep_tool.ui.layouts.column_encoding import ColumnEncoding
 from data_prep_tool.ui.layouts.column_options import ColumnPanel
+from data_prep_tool.ui.layouts.row_options import RowPanel
 
 
 class TestColumnEncodingOptions(unittest.TestCase):
@@ -81,6 +82,31 @@ class TestMainControllerMenuState(unittest.TestCase):
         self.assertTrue(self.window.action_redo.isEnabled())
 
 
+class TestMainControllerRowDeleteSelection(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        df = pd.DataFrame({"A": [1, 2, 3, 4, 5]})
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+        self.window = MainWindow()
+        self.controller = MainController(self.window, manager)
+
+    def tearDown(self):
+        self.window.close()
+
+    def test_delete_rows_is_single_undoable_action(self):
+        self.controller.on_delete_rows([1, 3])
+
+        self.assertEqual(list(self.controller.manager.df_wrapper.df["A"]), [1, 3, 5])
+        self.assertEqual(len(self.controller.manager.history), 1)
+
+        self.controller.undo()
+        self.assertEqual(list(self.controller.manager.df_wrapper.df["A"]), [1, 2, 3, 4, 5])
+
+
 class TestColumnPanelMultiSelection(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -118,3 +144,34 @@ class TestColumnPanelMultiSelection(unittest.TestCase):
         button_index = group_layout.indexOf(self.panel.column_merge.merge_button)
 
         self.assertLess(checkbox_index, button_index)
+
+
+class TestRowPanelMultiSelection(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.panel = RowPanel()
+
+    def test_set_rows_displays_selected_rows(self):
+        self.panel.set_rows([3, 1, 3])
+
+        self.assertIn("Selected rows (2): 1, 3", self.panel.row_index.text())
+        self.assertTrue(self.panel.delete_btn.isEnabled())
+        self.assertIn("(2)", self.panel.delete_btn.text())
+
+    def test_delete_emits_all_selected_rows(self):
+        self.panel.set_rows([2, 5])
+        captured = []
+        self.panel.delete_row_requested.connect(lambda rows: captured.append(rows))
+
+        self.panel._on_delete()
+
+        self.assertEqual(captured, [[2, 5]])
+
+    def test_set_rows_empty_disables_delete(self):
+        self.panel.set_rows([])
+
+        self.assertIn("Selected rows: none", self.panel.row_index.text())
+        self.assertFalse(self.panel.delete_btn.isEnabled())
