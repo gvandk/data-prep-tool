@@ -3,14 +3,20 @@ import sys
 import tempfile
 from pathlib import Path
 
-from data_prep_tool.core.data_loader import load_csv
+import pandas as pd
+
+from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from data_prep_tool.core.script_generator import ScriptGenerator
 from data_prep_tool.core.transformation_manager import TransformationManager
 
 
 def load_manager_from_csv(file_path: str, true_label: str, false_label: str) -> TransformationManager:
     """Load CSV into a fresh transformation manager and apply current binary labels."""
-    new_wrapper = load_csv(file_path)
+    try:
+        new_wrapper = DataFrameWrapper(pd.read_csv(file_path))
+    except Exception as e:
+        raise RuntimeError(f"Failed to load CSV: {e}") from e
+
     manager = TransformationManager(new_wrapper)
     manager.update_binary_labels(true_label, false_label)
     return manager

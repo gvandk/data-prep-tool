@@ -382,6 +382,7 @@ class TransformationManager:
                         true_label=transformation.true_label,
                         false_label=transformation.false_label
                     )
+                    graph.mark_deleted(parent_uuid)
 
                 elif isinstance(transformation, CellEditTransformation):
                     graph.register_cell_edit(transformation.col_uuid, transformation.row_index, transformation.new_value)

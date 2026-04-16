@@ -46,9 +46,7 @@ class DependencyGraph:
             )
 
     def register_binning(self, parent_uuid: str, child_uuids: List[str], child_names: List[str], strategy: str, n_bins: int, original_names: List[str] = None, cutoffs: List[float] = None, true_label="True", false_label="False"):
-        
-        self.mark_deleted(parent_uuid)
-        
+
         for i, c_uuid in enumerate(child_uuids):
             source = original_names[i] if original_names and i < len(original_names) else child_names[i]
             
