@@ -27,6 +27,7 @@ class MainController:
         self.manager = transformation_manager
         self._active_row_index = -1
         self.current_input_csv_path = None
+        self._last_multi_transform_targets = []
         
         self.model = DataFrameModel(self.manager.df_wrapper)
         self.main_window.table_view.setModel(self.model)
@@ -151,6 +152,103 @@ class MainController:
             return True
         except (ValueError, TypeError):
             return False
+
+    def _get_selected_operation_uuids(self, clicked_uuid: str = None) -> list[str]:
+        """Return selected operation target UUIDs, mapping children to parents and ordering visually."""
+        uuids, seen = [], set()
+        sel_model = self.main_window.table_view.selectionModel()
+        if sel_model:
+            indexes = list(sel_model.selectedColumns()) or list(sel_model.selectedIndexes())
+            for idx in indexes:
+                uuid = self.model.get_column_uuid(idx.column() if hasattr(idx, 'column') else idx.column())
+                if uuid and uuid not in seen:
+                    seen.add(uuid)
+                    uuids.append(uuid)
+        if clicked_uuid and clicked_uuid not in seen:
+            uuids.append(clicked_uuid)
+
+        # Normalize children to parents and deduplicate
+        wrap = self.manager.df_wrapper
+        normalized, seen = [], set()
+        for uuid in uuids:
+            target = uuid
+            if wrap.uuid_manager.is_child(uuid):
+                parent = wrap.get_parent_uuid(uuid)
+                if parent:
+                    target = parent
+            if target not in seen:
+                seen.add(target)
+                normalized.append(target)
+
+        # Sort by visual position, falling back to selection order
+        all_uuids = wrap.get_all_uuids()
+        fallback = {u: i for i, u in enumerate(normalized)}
+        normalized.sort(key=lambda u: (0, all_uuids.index(u)) if u in all_uuids else (1, fallback.get(u, len(fallback))))
+        return normalized
+
+    def _get_column_context(self, uuid: str) -> dict:
+        """Collect UI context for a column UUID (handles child/parent, stats, bounds)."""
+        wrap = self.manager.df_wrapper
+        col_name, is_child = wrap.get_col_name_by_uuid(uuid), wrap.uuid_manager.is_child(uuid)
+        parent_uuid = wrap.get_parent_uuid(uuid) if is_child else None
+        series = wrap.get_col_data_by_uuid(uuid)
+        parent_series = series
+
+        data_min, data_max = 0.0, 100.0
+        if series is not None and pd.api.types.is_numeric_dtype(series):
+            data_min, data_max = float(series.min()), float(series.max())
+
+        if is_child and parent_uuid:
+            for trans in reversed(self.manager.history):
+                if getattr(trans, 'col_uuid', None) == parent_uuid and hasattr(trans, 'values') and trans.values is not None:
+                    parent_series = trans.values
+                    if pd.api.types.is_numeric_dtype(parent_series):
+                        data_min, data_max = float(parent_series.min()), float(parent_series.max())
+                    break
+
+        stats = self._build_child_column_stats(wrap.uuid_manager.get_parent_name(uuid), parent_series, col_name, series) if is_child \
+                else self._calculate_stats(series)
+        return {
+            "uuid": uuid, "col_name": col_name, "is_child": is_child, "parent_uuid": parent_uuid,
+            "operation_uuid": parent_uuid if is_child and parent_uuid else uuid,
+            "selected_series": series, "series_for_binning": parent_series if is_child else series,
+            "stats_text": stats, "data_min": data_min, "data_max": data_max,
+        }
+
+    def _get_current_encoding_state(self, op_uuid: str) -> tuple[str, int]:
+        """Return current encoding strategy and bin count based on history."""
+        for trans in reversed(self.manager.history):
+            if hasattr(trans, 'col_uuid') and trans.col_uuid == op_uuid:
+                if isinstance(trans, BinningTransformation):
+                    return trans.strategy, trans.n_bins
+                if isinstance(trans, oneHotEncodeTransformation):
+                    return "One-Hot", 5
+        return "None", 5
+
+    def _undo_recent_encoding_transforms_for_targets(self, target_uuids: list[str]) -> bool:
+        """Undo recent encoding/binning transforms for selected targets in reverse order.
+
+        This matches the order in which multi-column transformations were appended
+        to history and allows reliable revert when switching back to None.
+        """
+        undone_any = False
+        remaining_targets = set(target_uuids)
+
+        # Undo only the most recent contiguous block of encoding/binning operations
+        # that belong to the selected targets.
+        while self.manager.history and remaining_targets:
+            last_trans = self.manager.history[-1]
+            if not isinstance(last_trans, (BinningTransformation, oneHotEncodeTransformation)):
+                break
+
+            if last_trans.col_uuid not in remaining_targets:
+                break
+
+            self.manager.undo_transformation()
+            remaining_targets.remove(last_trans.col_uuid)
+            undone_any = True
+
+        return undone_any
 
     def _update_menu_action_states(self):
         """Enable only the menu actions that are currently possible."""
@@ -383,82 +481,96 @@ with error handling for generation and execution issues."""
         self.main_window.set_panel("column")
         wrapper = self.manager.df_wrapper
         col_name = wrapper.get_col_name_by_uuid(uuid)
+        selected_operation_uuids = self._get_selected_operation_uuids(clicked_uuid=uuid)
+        selected_contexts = [self._get_column_context(col_uuid) for col_uuid in selected_operation_uuids]
+        clicked_context = self._get_column_context(uuid)
+        multi_selected = len(selected_operation_uuids) > 1
         
         self.main_window.column_options.column_rename.set_current_column(uuid, col_name)
         self.main_window.column_options.column_rename.uuid = uuid
         self.main_window.column_options.column_reorder.uuid = uuid
         self.main_window.column_options.column_reorder.set_current_index(uuid, str(logical_index))
 
-        is_child = wrapper.uuid_manager.is_child(uuid)
-        data_min = 0.0
-        data_max = 100.0
-        selected_series = wrapper.get_col_data_by_uuid(uuid)
-        parent_series = selected_series
+        if multi_selected:
+            selected_names = [wrapper.get_col_name_by_uuid(col_uuid) for col_uuid in selected_operation_uuids]
+            selected_names = [name for name in selected_names if name]
+            names_preview = ", ".join(selected_names[:4])
+            if len(selected_names) > 4:
+                names_preview += ", ..."
 
-        if selected_series is not None and pd.api.types.is_numeric_dtype(selected_series):
-             data_min = float(selected_series.min())
-             data_max = float(selected_series.max())
-
-        if is_child:
-             parent_uuid = wrapper.get_parent_uuid(uuid)
-             for trans in reversed(self.manager.history):
-                 if getattr(trans, 'col_uuid', None) == parent_uuid:
-                     if hasattr(trans, 'values') and trans.values is not None:
-                         parent_series = trans.values
-                         if pd.api.types.is_numeric_dtype(parent_series):
-                             data_min = float(parent_series.min())
-                             data_max = float(parent_series.max())
-                     break
-
-        if is_child:
-            parent_name_for_stats = wrapper.uuid_manager.get_parent_name(uuid)
-            stats_text = self._build_child_column_stats(parent_name_for_stats, parent_series, col_name, selected_series)
+            self.main_window.column_options.set_stats(
+                f"Selected Columns: {len(selected_operation_uuids)}\n"
+                f"Columns: {names_preview}\n\n"
+                "Encoding/binning changes will be applied to all selected columns."
+            )
         else:
-            stats_text = self._calculate_stats(selected_series)
-
-        self.main_window.column_options.set_stats(stats_text)
+            self.main_window.column_options.set_stats(clicked_context["stats_text"])
 
         encoder_widget = self.main_window.column_options.encoder_options
-        series_for_binning = parent_series if is_child else selected_series
-        can_binning = self._supports_binning(series_for_binning)
-        
-        if is_child:
-            parent_uuid = wrapper.get_parent_uuid(uuid)
-            parent_name = wrapper.uuid_manager.get_parent_name(uuid) 
+        can_binning = all(
+            self._supports_binning(context["series_for_binning"])
+            for context in selected_contexts
+        )
+
+        if multi_selected:
+            encoder_widget.set_current_column(
+                clicked_context["operation_uuid"],
+                "None",
+                child_columns=None,
+                n_bins=5,
+                parent_name="",
+                min_val=clicked_context["data_min"],
+                max_val=clicked_context["data_max"],
+                can_one_hot=True,
+                can_binning=can_binning,
+            )
+        elif clicked_context["is_child"]:
+            parent_uuid = clicked_context["parent_uuid"]
+            parent_name = wrapper.uuid_manager.get_parent_name(uuid)
             children_names = {c: wrapper.get_col_name_by_uuid(c) for c in wrapper.uuid_manager.get_children_uuids(parent_uuid)}
-            
-            strategy = "One-Hot"
-            n_bins = 5
-            for trans in reversed(self.manager.history):
-                if hasattr(trans, 'col_uuid') and trans.col_uuid == parent_uuid:
-                    if isinstance(trans, BinningTransformation):
-                        strategy = trans.strategy
-                        n_bins = trans.n_bins
-                        break
-                    elif isinstance(trans, oneHotEncodeTransformation):
-                        strategy = "One-Hot"
-                        break
-            
+            strategy, n_bins = self._get_current_encoding_state(parent_uuid)
+
             encoder_widget.set_current_column(
                 parent_uuid,
                 strategy,
                 children_names,
                 n_bins,
                 parent_name,
-                data_min,
-                data_max,
+                clicked_context["data_min"],
+                clicked_context["data_max"],
                 can_one_hot=True,
                 can_binning=can_binning,
             )
         else:
-            encoder_widget.set_current_column(
-                uuid,
-                "None",
-                min_val=data_min,
-                max_val=data_max,
-                can_one_hot=True,
-                can_binning=can_binning,
-            )
+            strategy, n_bins = self._get_current_encoding_state(uuid)
+            children_uuids = wrapper.uuid_manager.get_children_uuids(uuid)
+            
+            # If this is a parent with children (binned/encoded), show them
+            if children_uuids:
+                parent_name = col_name
+                children_names = {c: wrapper.get_col_name_by_uuid(c) for c in children_uuids}
+                encoder_widget.set_current_column(
+                    uuid,
+                    strategy,
+                    children_names,
+                    n_bins,
+                    parent_name,
+                    clicked_context["data_min"],
+                    clicked_context["data_max"],
+                    can_one_hot=True,
+                    can_binning=can_binning,
+                )
+            else:
+                # Regular column with no children
+                encoder_widget.set_current_column(
+                    uuid,
+                    strategy,
+                    min_val=clicked_context["data_min"],
+                    max_val=clicked_context["data_max"],
+                    n_bins=n_bins,
+                    can_one_hot=True,
+                    can_binning=can_binning,
+                )
 
         self.main_window.column_options.set_current_uuid(uuid)
 
@@ -472,32 +584,59 @@ before applying binning transformations."""
                 return
 
         try:
-            if self.manager.history:
-                last_trans = self.manager.history[-1]
-                if isinstance(last_trans, (BinningTransformation, oneHotEncodeTransformation)):
-                    if last_trans.col_uuid == uuid:
-                        self.manager.undo_transformation()
+            target_uuids = self._get_selected_operation_uuids(clicked_uuid=uuid)
+            if not target_uuids:
+                target_uuids = [uuid]
+
+            # Use batch only if uuid is directly in batch (don't use for children of batch items)
+            if strategy == "None" and self._last_multi_transform_targets and len(self._last_multi_transform_targets) > 1:
+                if any(uuid == t or (uuid in self._last_multi_transform_targets) for t in self._last_multi_transform_targets):
+                    target_uuids = list(self._last_multi_transform_targets)
             
-            all_uuids = self.manager.df_wrapper.get_all_uuids()
-            if uuid in all_uuids:
-                col_index = all_uuids.index(uuid)
-                
-                # Validate that the column is numeric before binning
-                target_series = self.manager.df_wrapper.get_col_data_by_uuid(uuid)
+            transformed_any = self._undo_recent_encoding_transforms_for_targets(target_uuids)
+            applied_targets = []
+
+            for target_uuid in target_uuids:
+
+                all_uuids = self.manager.df_wrapper.get_all_uuids()
+                if target_uuid not in all_uuids:
+                    continue
+
+                col_index = all_uuids.index(target_uuid)
+
+                # Validate that each targeted column is numeric before binning.
+                target_series = self.manager.df_wrapper.get_col_data_by_uuid(target_uuid)
                 try:
-                     sample = target_series.dropna()
-                     if len(sample) > 100: sample = sample.head(100)
-                     if not sample.empty:
-                         pd.to_numeric(sample, errors='raise')
+                    sample = target_series.dropna()
+                    if len(sample) > 100:
+                        sample = sample.head(100)
+                    if not sample.empty:
+                        pd.to_numeric(sample, errors='raise')
                 except ValueError:
-                     QMessageBox.warning(self.main_window, "Binning Error", "Selected column contains non-numeric data.\nBinning can only be applied to numeric columns.")
-                     return
+                    QMessageBox.warning(
+                        self.main_window,
+                        "Binning Error",
+                        "At least one selected column contains non-numeric data.\n"
+                        "Binning can only be applied to numeric columns.",
+                    )
+                    return
 
                 self.manager.add_binning(col_index, strategy, n_bins, cutoffs)
+                applied_targets.append(target_uuid)
+                transformed_any = True
+
+            if transformed_any:
+                if len(applied_targets) > 1:
+                    self._last_multi_transform_targets = list(applied_targets)
+                else:
+                    self._last_multi_transform_targets = []
+
                 self.refresh_view()
-                children = self.manager.df_wrapper.get_children_uuids(uuid)
-                if children and children[0] in self.manager.df_wrapper.get_all_uuids():
-                    self.on_header_clicked(self.manager.df_wrapper.get_all_uuids().index(children[0]))
+                # Only auto-navigate to child for multi-column transformations
+                if len(target_uuids) > 1 and strategy != "None":
+                    children = self.manager.df_wrapper.get_children_uuids(target_uuids[0])
+                    if children and children[0] in self.manager.df_wrapper.get_all_uuids():
+                        self.on_header_clicked(self.manager.df_wrapper.get_all_uuids().index(children[0]))
         except ValueError as e:
             QMessageBox.warning(self.main_window, "Binning Error", f"Invalid binning parameters:\n{str(e)}")
         except Exception:
@@ -507,29 +646,52 @@ before applying binning transformations."""
         """Handle changes in encoding strategy for a column, applying or undoing one-hot encoding transformations as needed, 
 with error handling for invalid operations."""
         try:
-            if self.manager.history:
-                last_trans = self.manager.history[-1]
-                if isinstance(last_trans, (BinningTransformation, oneHotEncodeTransformation)):
-                    if last_trans.col_uuid == uuid:
-                        self.manager.undo_transformation()
-                        self.refresh_view()
-                        if encoding == "None":
-                            all_uuids = self.manager.df_wrapper.get_all_uuids()
-                            if uuid in all_uuids:
-                                self.on_header_clicked(all_uuids.index(uuid))
-                            return
+            target_uuids = self._get_selected_operation_uuids(clicked_uuid=uuid)
+            if not target_uuids:
+                target_uuids = [uuid]
 
-            if encoding == "One-Hot":
+            # Use batch only if uuid is directly in batch (don't use for children of batch items)
+            if encoding == "None" and self._last_multi_transform_targets and len(self._last_multi_transform_targets) > 1:
+                if any(uuid == t or (uuid in self._last_multi_transform_targets) for t in self._last_multi_transform_targets):
+                    target_uuids = list(self._last_multi_transform_targets)
+
+            transformed_any = self._undo_recent_encoding_transforms_for_targets(target_uuids)
+            applied_targets = []
+
+            for target_uuid in target_uuids:
+
+                if encoding != "One-Hot":
+                    continue
+
                 all_uuids = self.manager.df_wrapper.get_all_uuids()
-                if uuid in all_uuids:
-                    col_index = all_uuids.index(uuid)
+                if target_uuid not in all_uuids:
+                    continue
 
-                    if not self._confirm_one_hot_encoding(uuid):
-                        return
-                    
-                    self.manager.add_onehot(col_index)
-                    self.refresh_view()
-                    children = self.manager.df_wrapper.get_children_uuids(uuid)
+                if not self._confirm_one_hot_encoding(target_uuid):
+                    return
+
+                col_index = all_uuids.index(target_uuid)
+                self.manager.add_onehot(col_index)
+                applied_targets.append(target_uuid)
+                transformed_any = True
+
+            if transformed_any:
+                if encoding == "None":
+                    self._last_multi_transform_targets = []
+                elif len(applied_targets) > 1:
+                    self._last_multi_transform_targets = list(applied_targets)
+                else:
+                    self._last_multi_transform_targets = []
+
+                self.refresh_view()
+                if encoding == "None" and len(target_uuids) == 1:
+                    all_uuids = self.manager.df_wrapper.get_all_uuids()
+                    if target_uuids[0] in all_uuids:
+                        self.on_header_clicked(all_uuids.index(target_uuids[0]))
+
+                # Only auto-navigate to child for multi-column one-hot
+                if encoding == "One-Hot" and len(target_uuids) > 1:
+                    children = self.manager.df_wrapper.get_children_uuids(target_uuids[0])
                     if children and children[0] in self.manager.df_wrapper.get_all_uuids():
                         self.on_header_clicked(self.manager.df_wrapper.get_all_uuids().index(children[0]))
         except ValueError as e:
