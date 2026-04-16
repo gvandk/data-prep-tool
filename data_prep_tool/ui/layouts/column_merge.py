@@ -46,10 +46,9 @@ class ColumnMerge(QWidget):
             shown_names += ", ..."
 
         self.info_label.setText(
-            f"Selected columns ({len(selected_names)}): {shown_names}\n"
-            "Rule:\n"
-            "- Any True in selected columns -> merged value is True\n"
-            "- All False -> merged value is False"
+            "Merge binary columns using logical OR\n"
+            "(missing values are treated as false)\n\n"
+            f"Columns to be merged: {shown_names}"
         )
 
         default_name = "merged_binary"
@@ -69,9 +68,7 @@ class ColumnMerge(QWidget):
         self._selected_uuids = []
         self.info_label.setText(
             "Use Ctrl+click on headers to select multiple columns.\n"
-            "Rule:\n"
-            "- Any True in selected columns -> merged value is True\n"
-            "- All False -> merged value is False"
+            "Merge binary columns using logical OR"
         )
         self.name_input.clear()
         self.name_input.setEnabled(False)

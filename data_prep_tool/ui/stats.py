@@ -58,7 +58,7 @@ def build_categorical_top_counts(series: pd.Series, top_n: int = 5) -> str:
     lines = ["Top Values (count):"]
     for value, count in top_counts.items():
         label = format_category_label(value)
-        lines.append(f"- {label}: {int(count)}")
+        lines.append(f"     {label}: {int(count)}")
 
     return "\n".join(lines)
 

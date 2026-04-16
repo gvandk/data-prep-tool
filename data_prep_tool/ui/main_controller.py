@@ -199,8 +199,7 @@ class MainController:
         except (ValueError, TypeError):
             return False
 
-    def _get_display_dtype(self, col_name: str, series: pd.Series) -> str:
-        col_uuid = self.manager.df_wrapper.get_uuid_by_name(col_name)
+    def _get_display_dtype(self, col_uuid: str, series: pd.Series) -> str:
         is_binary_column = col_uuid is not None and self.manager.is_binary_column(col_uuid)
         return get_display_dtype(series, is_binary_column)
 
@@ -372,11 +371,16 @@ with error handling for generation and execution issues."""
             self.main_window.set_panel("column")
             self.main_window.column_options.set_multi_column_mode(selected_uuids, selected_names, all_binary)
 
+            selected_type_rows = []
+            for col_uuid, col_name in zip(selected_uuids, selected_names):
+                series = self.manager.df_wrapper.get_col_data_by_uuid(col_uuid)
+                display_type = "unknown" if series is None else self._get_display_dtype(col_uuid, series)
+                selected_type_rows.append(f'    "{col_name}": {display_type}')
+
             self.main_window.column_options.set_stats(
                 f"Selected columns: {len(selected_uuids)}\n"
-                "Rule:\n"
-                "- Any True in selected columns -> merged value is True\n"
-                "- All False -> merged value is False"
+                "Types:\n"
+                + "\n".join(selected_type_rows)
             )
             self.main_window.table_view.setFocus()
             return
