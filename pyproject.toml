@@ -4,13 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "data-prep-tool"
-version = "0.1.0"
+version = "1.0.0"
+changes = [
+    {version = "1.0.0", date = "2024-06-01", description = "Fixed multiple bugs; added binary column merging and row filtering features."},
+    {version = "0.1.0", date = "2024-06-01", description = "Initial release with core data preparation features."},
+]
 description = "Desktop CSV data preparation tool built with PyQt6 and pandas, focusing on transforming data into binary matrix form."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [
-    {name = "Gregor Vandák", email = "gregor.vandak@email.com"}
-]
+authors = [Gregor Vandák <gregor.vandak@email.com>]
+
 license = {text = "MIT"}
 keywords = ["data preparation", "csv", "binary matrix", "PyQt6"]
 classifiers = [

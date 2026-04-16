@@ -38,6 +38,37 @@ This project was created as part of a bachelor thesis at Palacký University Olo
    ```bash
    pytest
    ```
+
+## Using the generated script
+
+After applying transformations in the GUI, use **File -> Export Script** to save a Python script (default name: `cleaning_script.py`).
+
+The exported script replays your transformation pipeline and can be run from the command line:
+
+```bash
+python cleaning_script.py [input_csv] [output_csv]
+```
+
+- If `input_csv` is omitted or set to `-`, the script reads CSV data from standard input.
+- If `output_csv` is omitted or set to `-`, the script writes the transformed table to standard output.
+
+Examples:
+
+```bash
+# Read from a file and save to a file
+python cleaning_script.py raw_data.csv cleaned_data.csv
+
+# Read from stdin and write to stdout
+cat raw_data.csv | python cleaning_script.py - -
+
+# Read from stdin and save to a file
+cat raw_data.csv | python cleaning_script.py - cleaned_data.csv
+```
+
+Notes:
+
+- The exported script requires `pandas` in the environment where it is executed.
+- On failure, the script prints the transformation step that failed together with a readable reason and exits with a non-zero status.
    
 ## Notes / Other
 
