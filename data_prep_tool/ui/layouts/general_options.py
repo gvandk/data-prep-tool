@@ -4,8 +4,8 @@ from PyQt6.QtGui import QIntValidator
 
 class GeneralPanel(QWidget):
     binary_values_changed = pyqtSignal(str, str)
-    add_row_requested = pyqtSignal(str)
-    add_col_requested = pyqtSignal(str)
+    add_row_requested = pyqtSignal()
+    add_col_requested = pyqtSignal()
     view_settings_changed = pyqtSignal(int, int)
 
     def __init__(self, parent=None):
@@ -44,7 +44,6 @@ class GeneralPanel(QWidget):
         form_layout.addWidget(QLabel("False Label:"))
         form_layout.addWidget(self.false_input)
         layout.addLayout(form_layout)
-        layout.addWidget(QLabel("(Applies to One-Hot and Binning)"))
 
         layout.addSpacing(20)
 
@@ -71,14 +70,6 @@ class GeneralPanel(QWidget):
         self.add_config_label.setFont(font)
         layout.addWidget(self.add_config_label)
 
-        layout.addWidget(QLabel("Default Value:"))
-        self.default_value_input = QLineEdit("")
-        layout.addWidget(self.default_value_input)
-
-        layout.addWidget(QLabel("New Column Name:"))
-        self.new_col_name_input = QLineEdit("new_column")
-        layout.addWidget(self.new_col_name_input)
-
         btn_layout = QHBoxLayout()
         self.add_row_btn = QPushButton("Add Row")
         self.add_col_btn = QPushButton("Add Column")
@@ -92,8 +83,8 @@ class GeneralPanel(QWidget):
         self.false_input.textChanged.connect(self.on_values_changed)
         self.max_rows_input.textChanged.connect(self.on_view_settings_changed)
         self.float_decimal_select.currentTextChanged.connect(self.on_view_settings_changed)
-        self.add_row_btn.clicked.connect(lambda: self.add_row_requested.emit(self.default_value_input.text()))
-        self.add_col_btn.clicked.connect(lambda: self.add_col_requested.emit(self.default_value_input.text()))
+        self.add_row_btn.clicked.connect(self.add_row_requested.emit)
+        self.add_col_btn.clicked.connect(self.add_col_requested.emit)
 
     def on_values_changed(self):
         """Handle changes in binary value labels and emit signal."""

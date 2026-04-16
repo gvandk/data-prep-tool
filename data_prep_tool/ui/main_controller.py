@@ -1,4 +1,14 @@
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QApplication, QAbstractItemView
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QMessageBox,
+    QApplication,
+    QAbstractItemView,
+    QInputDialog,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLineEdit,
+)
 from PyQt6.QtCore import QItemSelectionModel, Qt
 import pandas as pd
 import subprocess
@@ -43,6 +53,8 @@ class MainController:
         self.main_window.action_export_csv.triggered.connect(self.export_csv)
         self.main_window.action_undo.triggered.connect(self.undo)
         self.main_window.action_redo.triggered.connect(self.redo)
+        self.main_window.action_add_row.triggered.connect(self.on_add_row)
+        self.main_window.action_add_col.triggered.connect(self.on_add_col)
         self.main_window.action_delete.triggered.connect(self.on_delete_pressed)
         # Connect table interactions
         self.main_window.table_view.horizontalHeader().sectionClicked.connect(self.on_header_clicked)
@@ -161,8 +173,13 @@ class MainController:
 
     def _update_menu_action_states(self):
         """Enable only the menu actions that are currently possible."""
+        has_loaded_df = self.manager.df_wrapper.df is not None
         self.main_window.action_undo.setEnabled(bool(self.manager.history))
         self.main_window.action_redo.setEnabled(bool(self.manager.redo))
+        self.main_window.action_add_row.setEnabled(has_loaded_df)
+        self.main_window.action_add_col.setEnabled(has_loaded_df)
+        self.main_window.general_options.add_row_btn.setEnabled(has_loaded_df)
+        self.main_window.general_options.add_col_btn.setEnabled(has_loaded_df)
 
     def on_panel_close(self):
         self.main_window.set_panel("general")
@@ -777,18 +794,56 @@ with error handling for invalid operations."""
         except ValueError:
             QApplication.beep()
 
-    def on_add_row(self, default_value):
+    def on_add_row(self):
+        if self.manager.df_wrapper.df is None:
+            QMessageBox.warning(self.main_window, "Add Row Error", "Please load a CSV file first.")
+            return
+
+        default_value, ok = QInputDialog.getText(
+            self.main_window,
+            "Add Row",
+            "Default Value:",
+        )
+        if not ok:
+            return
+
         try:
             self.manager.add_row_add(self._set_type(default_value))
             self.refresh_view()
         except Exception:
             QApplication.beep()
 
-    def on_add_col(self, default_value):
-        col_name = self.main_window.general_options.new_col_name_input.text().strip()
+    def on_add_col(self):
+        if self.manager.df_wrapper.df is None:
+            QMessageBox.warning(self.main_window, "Add Column Error", "Please load a CSV file first.")
+            return
+
+        dialog = QDialog(self.main_window)
+        dialog.setWindowTitle("Add Column")
+
+        form_layout = QFormLayout(dialog)
+        col_name_input = QLineEdit("new_column")
+        default_value_input = QLineEdit("")
+        form_layout.addRow("New Column Name:", col_name_input)
+        form_layout.addRow("Default Value:", default_value_input)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        form_layout.addWidget(button_box)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        col_name = col_name_input.text().strip()
         if not col_name:
             QMessageBox.warning(self.main_window, "Input Error", "Please provide a name for the new column.")
             return
+
+        default_value = default_value_input.text()
+
         try:
             self.manager.add_col_add(col_name, self._set_type(default_value))
             self.refresh_view()

@@ -99,6 +99,9 @@ class MainWindow(QMainWindow):
         self.action_undo = self.edit_menu.addAction("Undo")
         self.action_redo = self.edit_menu.addAction("Redo")
         self.edit_menu.addSeparator()
+        self.action_add_row = self.edit_menu.addAction("Add Row")
+        self.action_add_col = self.edit_menu.addAction("Add Column")
+        self.edit_menu.addSeparator()
         self.action_delete = self.edit_menu.addAction("Delete")
         
         # Shortcuts
