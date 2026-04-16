@@ -12,6 +12,44 @@ class TestScriptGenerator(unittest.TestCase):
         script = self.generator.generate_script()
         self.assertIn("pd.read_csv(input_path)", script)
 
+    def test_generated_script_includes_user_readable_error_helpers(self):
+        self.graph.register_load("u1", "Age")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("def _handle_step_error(operation, exc):", script)
+        self.assertIn("Error: Script failed during step:", script)
+        self.assertIn("Reason:", script)
+
+    def test_generated_script_tracks_operation_context_per_step(self):
+        self.graph.register_load("u1", "Age")
+        self.graph.register_rename("u1", "Years")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("except Exception as exc:", script)
+        self.assertIn("_handle_step_error('Rename column: Age to Years', exc)", script)
+
+    def test_generated_script_includes_specific_friendly_reason_cases(self):
+        self.graph.register_load("u1", "Age")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("if isinstance(exc, KeyError):", script)
+        self.assertIn("A required column or key named", script)
+        self.assertIn("if isinstance(exc, pd.errors.ParserError):", script)
+        self.assertIn("if isinstance(exc, IndexError):", script)
+
+    def test_generated_script_includes_unexpected_error_details(self):
+        self.graph.register_load("u1", "Age")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("Unexpected error (", script)
+        self.assertIn("Full error:", script)
+        self.assertIn("print(f\"Reason: {_format_error_reason(exc)}\")", script)
+        self.assertNotIn("if reason.startswith('Unexpected error'):", script)
+
     def test_rename_script(self):
 
         self.graph.register_load("u1", "Age")

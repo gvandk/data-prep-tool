@@ -880,13 +880,13 @@ class TestScriptGeneratorEdgeCases(unittest.TestCase):
         self.assertNotIn("'B'", script.split("df = df[[")[-1])
 
     def test_script_imports_required_libraries(self):
-        """Generated script must import pandas and numpy."""
+        """Generated script must only include required imports."""
         df = pd.DataFrame({'A': [1]})
         _, mgr = make_manager(df)
 
         script = generate_script(mgr)
         self.assertIn("import pandas as pd", script)
-        self.assertIn("import numpy as np", script)
+        self.assertNotIn("import numpy as np", script)
 
     def test_multiple_row_deletes_produce_correct_offset_adjustments(self):
         """Sequential row deletes must use incrementally offset-adjusted indices in script."""
