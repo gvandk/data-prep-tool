@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -123,6 +124,41 @@ class TestMainControllerRowDeleteSelection(unittest.TestCase):
 
         self.controller.undo()
         self.assertEqual(list(self.controller.manager.df_wrapper.df["A"]), [1, 2, 3, 4, 5])
+
+
+class TestMainControllerRowAddVisibility(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        df = pd.DataFrame({"A": [1, 2, 3, 4, 5]})
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+        self.window = MainWindow()
+        self.controller = MainController(self.window, manager)
+
+    def tearDown(self):
+        self.window.close()
+
+    @patch("data_prep_tool.ui.main_controller.QInputDialog.getText", return_value=("9", True))
+    def test_add_row_expands_view_and_focuses_new_row_when_capped(self, _mock_get_text):
+        self.controller.on_view_settings_changed(3, 2)
+
+        with patch.object(self.window.table_view, "scrollTo", wraps=self.window.table_view.scrollTo) as scroll_to_mock:
+            self.controller.on_add_row()
+
+        self.assertEqual(self.controller.model.max_rows, 6)
+        self.assertEqual(self.window.general_options.max_rows_input.text(), "6")
+        self.assertEqual(self.controller.model.rowCount(), 6)
+
+        selection_model = self.window.table_view.selectionModel()
+        self.assertIsNotNone(selection_model)
+        self.assertEqual(selection_model.currentIndex().row(), 5)
+
+        self.assertTrue(scroll_to_mock.called)
+        scrolled_rows = [call.args[0].row() for call in scroll_to_mock.call_args_list if call.args]
+        self.assertIn(5, scrolled_rows)
 
 
 class TestColumnPanelMultiSelection(unittest.TestCase):

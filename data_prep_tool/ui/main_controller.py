@@ -289,6 +289,43 @@ class MainController:
         self.model.set_view_settings(max_rows, decimal_places)
         self.refresh_view()
 
+    def _ensure_row_is_visible_in_view(self, row_index: int):
+        """Expand max visible rows when needed so the target row can be displayed."""
+        if row_index < 0:
+            return
+
+        required_rows = row_index + 1
+        if required_rows <= self.model.max_rows:
+            return
+
+        self.model.set_view_settings(required_rows, self.model.float_precision)
+
+        max_rows_input = self.main_window.general_options.max_rows_input
+        previous_block_state = max_rows_input.blockSignals(True)
+        max_rows_input.setText(str(required_rows))
+        max_rows_input.blockSignals(previous_block_state)
+
+    def _focus_new_row(self, row_index: int):
+        """Highlight and center the requested row in the table view."""
+        model = self.main_window.table_view.model()
+        if model is None:
+            return
+        if row_index < 0 or row_index >= model.rowCount() or model.columnCount() == 0:
+            return
+
+        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+
+        target_index = model.index(row_index, 0)
+        selection_model = self.main_window.table_view.selectionModel()
+        if selection_model:
+            selection_model.setCurrentIndex(
+                target_index,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+            )
+        self.main_window.table_view.scrollTo(target_index, QAbstractItemView.ScrollHint.PositionAtCenter)
+        self.main_window.table_view.setFocus()
+
     def open_csv(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self.main_window, "Open CSV File", "", "CSV Files (*.csv)"
@@ -809,7 +846,10 @@ with error handling for invalid operations."""
 
         try:
             self.manager.add_row_add(self._set_type(default_value))
+            new_row_index = len(self.manager.df_wrapper.df) - 1
+            self._ensure_row_is_visible_in_view(new_row_index)
             self.refresh_view()
+            self._focus_new_row(new_row_index)
         except Exception:
             QApplication.beep()
 
