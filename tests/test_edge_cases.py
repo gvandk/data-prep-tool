@@ -228,7 +228,8 @@ class TestOneHotEdgeCases(unittest.TestCase):
         script = generate_script(mgr)
 
         self.assertIsNotNone(graph)
-        self.assertIn("df.to_csv(output_path, index=False)", script)
+        self.assertIn("_print_stdout_table(df)", script)
+        self.assertIn("df.to_csv(output_arg, index=False)", script)
 
 
 

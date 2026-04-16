@@ -59,7 +59,8 @@ class TestScriptGenerator(unittest.TestCase):
         self.graph.register_load("u1", "Age")
         script = self.generator.generate_script()
 
-        self.assertIn("pd.read_csv(input_path)", script)
+        self.assertIn("df = pd.read_csv(sys.stdin)", script)
+        self.assertIn("df = pd.read_csv(input_arg)", script)
         self.assertIn("df[['Age']]", script)
 
     def test_rename_script_generation(self):

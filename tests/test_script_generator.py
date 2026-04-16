@@ -10,7 +10,8 @@ class TestScriptGenerator(unittest.TestCase):
     def test_simple_load(self):
         self.graph.register_load("u1", "Age", "data.csv")
         script = self.generator.generate_script()
-        self.assertIn("pd.read_csv(input_path)", script)
+        self.assertIn("df = pd.read_csv(sys.stdin)", script)
+        self.assertIn("df = pd.read_csv(input_arg)", script)
 
     def test_generated_script_includes_user_readable_error_helpers(self):
         self.graph.register_load("u1", "Age")

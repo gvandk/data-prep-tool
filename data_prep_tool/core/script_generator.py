@@ -175,6 +175,10 @@ class ScriptGenerator:
             "    print(f\"Reason: {_format_error_reason(exc)}\")",
             "    sys.exit(1)",
             "",
+            "def _print_stdout_table(df):",
+            "    # Render a simple readable table when writing to standard output.",
+            "    print(df.to_string(index=False, na_rep=''))",
+            "",
         ]
 
         if needs_binary_flag_helper:
@@ -223,15 +227,17 @@ class ScriptGenerator:
 
         lines.extend(
             [
-                "if len(sys.argv) != 3:",
-                "    print(\"Usage: python script.py <input_csv> <output_csv>\")",
+                "if len(sys.argv) > 3:",
+                "    print(\"Usage: python script.py [input_csv] [output_csv]\")",
+                "    print(\"Use '-' or omit input_csv to read from standard input.\")",
+                "    print(\"Use '-' or omit output_csv to write to standard output.\")",
                 "    sys.exit(1)",
                 "",
-                "input_path = sys.argv[1]",
-                "output_path = sys.argv[2]",
+                "input_arg = sys.argv[1] if len(sys.argv) >= 2 else '-'",
+                "output_arg = sys.argv[2] if len(sys.argv) >= 3 else '-'",
                 "",
-                "if not os.path.exists(input_path):",
-                "    print(f\"Error: Input file '{input_path}' not found.\")",
+                "if input_arg != '-' and not os.path.exists(input_arg):",
+                "    print(f\"Error: Input file '{input_arg}' not found.\")",
                 "    sys.exit(1)",
                 "",
             ]
@@ -240,7 +246,12 @@ class ScriptGenerator:
         self._append_guarded_step(
             lines,
             "Load input CSV",
-            ["df = pd.read_csv(input_path)"],
+            [
+                "if input_arg == '-':",
+                "    df = pd.read_csv(sys.stdin)",
+                "else:",
+                "    df = pd.read_csv(input_arg)",
+            ],
             "# Load Data",
         )
 
@@ -249,9 +260,20 @@ class ScriptGenerator:
             self._append_guarded_step(
                 lines,
                 "Write output CSV",
-                ["df.to_csv(output_path, index=False)"],
+                [
+                    "if output_arg == '-':",
+                    "    _print_stdout_table(df)",
+                    "else:",
+                    "    df.to_csv(output_arg, index=False)",
+                ],
             )
-            lines.append("print(f\"Successfully processed '{input_path}' and saved to '{output_path}'.\")")
+            lines.extend(
+                [
+                    "if output_arg != '-':",
+                    "    source_desc = input_arg if input_arg != '-' else '<stdin>'",
+                    "    print(f\"Successfully processed '{source_desc}' and saved to '{output_arg}'.\")",
+                ]
+            )
             return "\n".join(lines)
 
         processed_binning_parents: Set[str] = set()
@@ -501,8 +523,19 @@ class ScriptGenerator:
         self._append_guarded_step(
             lines,
             "Write output CSV",
-            ["df.to_csv(output_path, index=False)"],
+            [
+                "if output_arg == '-':",
+                "    _print_stdout_table(df)",
+                "else:",
+                "    df.to_csv(output_arg, index=False)",
+            ],
         )
-        lines.append("print(f\"Successfully processed '{input_path}' and saved to '{output_path}'.\")")
+        lines.extend(
+            [
+                "if output_arg != '-':",
+                "    source_desc = input_arg if input_arg != '-' else '<stdin>'",
+                "    print(f\"Successfully processed '{source_desc}' and saved to '{output_arg}'.\")",
+            ]
+        )
 
         return "\n".join(lines)
