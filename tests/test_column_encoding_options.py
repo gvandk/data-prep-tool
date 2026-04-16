@@ -11,6 +11,7 @@ from data_prep_tool.core.transformation_manager import TransformationManager
 from data_prep_tool.ui.main_controller import MainController
 from data_prep_tool.ui.main_window import MainWindow
 from data_prep_tool.ui.layouts.column_encoding import ColumnEncoding
+from data_prep_tool.ui.layouts.column_options import ColumnPanel
 
 
 class TestColumnEncodingOptions(unittest.TestCase):
@@ -78,3 +79,42 @@ class TestMainControllerMenuState(unittest.TestCase):
 
         self.assertFalse(self.window.action_undo.isEnabled())
         self.assertTrue(self.window.action_redo.isEnabled())
+
+
+class TestColumnPanelMultiSelection(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.panel = ColumnPanel()
+
+    def test_multi_column_mode_shows_only_merge_controls(self):
+        self.panel.set_multi_column_mode(["u1", "u2"], ["A", "B"], can_merge=True)
+
+        self.assertFalse(self.panel.column_merge.isHidden())
+        self.assertTrue(self.panel.encoder_options.isHidden())
+        self.assertTrue(self.panel.delete_btn.isHidden())
+        self.assertTrue(self.panel.column_merge.merge_button.isEnabled())
+        self.assertTrue(self.panel.column_merge.delete_sources_checkbox.isChecked())
+
+    def test_multi_column_mode_disables_merge_when_not_binary(self):
+        self.panel.set_multi_column_mode(["u1", "u2"], ["A", "B"], can_merge=False)
+
+        self.assertFalse(self.panel.column_merge.isHidden())
+        self.assertFalse(self.panel.column_merge.merge_button.isEnabled())
+
+    def test_single_column_mode_restores_standard_controls(self):
+        self.panel.set_multi_column_mode(["u1", "u2"], ["A", "B"], can_merge=True)
+        self.panel.set_single_column_mode()
+
+        self.assertTrue(self.panel.column_merge.isHidden())
+        self.assertFalse(self.panel.encoder_options.isHidden())
+        self.assertFalse(self.panel.delete_btn.isHidden())
+
+    def test_merge_checkbox_is_above_merge_button(self):
+        group_layout = self.panel.column_merge.group.layout()
+        checkbox_index = group_layout.indexOf(self.panel.column_merge.delete_sources_checkbox)
+        button_index = group_layout.indexOf(self.panel.column_merge.merge_button)
+
+        self.assertLess(checkbox_index, button_index)

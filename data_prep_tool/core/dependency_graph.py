@@ -110,6 +110,19 @@ class DependencyGraph:
             params={"default_value": default_value, "source_name": col_name}
         )
 
+    def register_binary_merge(self, new_col_uuid: str, new_col_name: str, source_col_uuids: List[str], true_label="True", false_label="False", delete_source_columns: bool = True):
+        self.nodes[new_col_uuid] = GraphNode(
+            uuid=new_col_uuid,
+            current_name=new_col_name,
+            operation="BINARY_MERGE",
+            parents=list(source_col_uuids or []),
+            params={
+                "true_label": true_label,
+                "false_label": false_label,
+                "delete_source_columns": bool(delete_source_columns),
+            },
+        )
+
     def mark_deleted(self, uuid: str):
         if uuid in self.nodes:
             self.nodes[uuid].is_deleted = True

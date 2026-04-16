@@ -40,7 +40,7 @@ class ScriptGenerator:
 
             for child in children_by_parent.get(uuid, []):
                 # Keep parent-side edits/renames only if a transform branch still has live outputs.
-                if child.operation in ("ONE_HOT", "BINNING") and not child.is_deleted:
+                if child.operation in ("ONE_HOT", "BINNING", "BINARY_MERGE") and not child.is_deleted:
                     transform_relevance_cache[uuid] = True
                     return True
                 if has_effective_transform_descendants(child.uuid):
@@ -88,6 +88,38 @@ class ScriptGenerator:
             "    print(f\"Error: Script failed during step: {operation}.\")",
             "    print(f\"Reason: {_format_error_reason(exc)}\")",
             "    sys.exit(1)",
+            "",
+            "def _to_binary_flag(value, true_label, false_label):",
+            "    if pd.isna(value):",
+            "        return None",
+            "    if isinstance(value, bool):",
+            "        return value",
+            "    if isinstance(value, (int, float)):",
+            "        if value == 1:",
+            "            return True",
+            "        if value == 0:",
+            "            return False",
+            "    if isinstance(value, str):",
+            "        token = value.strip()",
+            "        lowered = token.casefold()",
+            "        true_norm = str(true_label).strip().casefold()",
+            "        false_norm = str(false_label).strip().casefold()",
+            "        if lowered in {'true', '1', true_norm}:",
+            "            return True",
+            "        if lowered in {'false', '0', false_norm}:",
+            "            return False",
+            "    return None",
+            "",
+            "def _merge_binary_columns(df, source_cols, output_col, true_label, false_label, delete_sources=True):",
+            "    normalized = pd.DataFrame(index=df.index)",
+            "    for col in source_cols:",
+            "        normalized[col] = df[col].map(lambda value: _to_binary_flag(value, true_label, false_label))",
+            "        invalid_values = normalized[col].isna() & df[col].notna()",
+            "        if invalid_values.any():",
+            "            raise ValueError(f\"Column '{col}' is not binary and cannot be merged.\")",
+            "    df[output_col] = normalized.fillna(False).any(axis=1).map({True: true_label, False: false_label})",
+            "    if delete_sources:",
+            "        df.drop(columns=source_cols, inplace=True)",
             "",
             "if len(sys.argv) != 3:",
             "    print(\"Usage: python script.py <input_csv> <output_csv>\")",
@@ -236,6 +268,31 @@ class ScriptGenerator:
                     f"Add column '{node.current_name}'",
                     [f"df[{self._s(node.current_name)}] = {repr(default)}"],
                     f"# Add column: {node.current_name} with default value {repr(default)}",
+                )
+
+            elif node.operation == "BINARY_MERGE":
+                source_nodes = [self.graph.get_node(parent_uuid) for parent_uuid in node.parents]
+                source_names = [source.current_name for source in source_nodes if source is not None and source.current_name]
+                if len(source_names) < 2:
+                    continue
+
+                true_label = node.params.get('true_label', 'True')
+                false_label = node.params.get('false_label', 'False')
+                delete_source_columns = bool(node.params.get('delete_source_columns', True))
+                source_cols_str = ", ".join(self._s(col) for col in source_names)
+                merge_lines = [
+                    (
+                        f"_merge_binary_columns(df, [{source_cols_str}], {self._s(node.current_name)}, "
+                        f"{self._s(true_label)}, {self._s(false_label)}, delete_sources={repr(delete_source_columns)})"
+                    ),
+                ]
+                source_names_text = ", ".join(source_names)
+
+                self._append_guarded_step(
+                    lines,
+                    f"Merge binary columns [{source_names_text}] into '{node.current_name}'",
+                    merge_lines,
+                    f"# Merge binary columns [{source_names_text}] into: {node.current_name}",
                 )
 
             elif node.operation == "ONE_HOT":

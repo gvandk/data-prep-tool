@@ -13,6 +13,7 @@ class TableView(QTableView):
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.horizontalHeader().setSectionsClickable(True)
 
         header = self.horizontalHeader()
         header.setSectionsMovable(True)

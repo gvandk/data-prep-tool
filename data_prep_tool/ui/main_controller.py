@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QApplication, QAbstractItemView
-from PyQt6.QtCore import QItemSelectionModel
+from PyQt6.QtCore import QItemSelectionModel, Qt
 import pandas as pd
 import subprocess
 import sys
@@ -27,6 +27,8 @@ class MainController:
         self.main_window = main_window
         self.manager = transformation_manager
         self._active_row_index = -1
+        self._header_selected_columns = set()
+        self._last_header_clicked_column = None
         self.current_input_csv_path = None
         
         self.model = DataFrameModel(self.manager.df_wrapper)
@@ -59,6 +61,7 @@ class MainController:
         col_panel.encoder_options.child_rename_request.connect(self.on_column_rename)
         col_panel.column_reorder.column_reorder_request.connect(self.on_manual_reorder)
         col_panel.delete_col_requested.connect(self.on_delete_col)
+        col_panel.binary_merge_request.connect(self.on_binary_merge)
         col_panel.close_request.connect(self.on_panel_close)
         # Connect cell options panel signals
         cell_panel = self.main_window.cell_options
@@ -161,7 +164,52 @@ class MainController:
     def on_panel_close(self):
         self.main_window.set_panel("general")
         self.main_window.table_view.clearSelection()
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._header_selected_columns.clear()
+        self._last_header_clicked_column = None
         self._active_row_index = -1
+
+    def _update_header_selection(self, logical_index: int) -> list[int]:
+        """Update selected columns from a header click and return sorted selected indices."""
+        modifiers = QApplication.keyboardModifiers()
+        is_ctrl = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        is_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        if is_shift and self._last_header_clicked_column is not None:
+            start = min(self._last_header_clicked_column, logical_index)
+            end = max(self._last_header_clicked_column, logical_index)
+            if not is_ctrl:
+                self._header_selected_columns.clear()
+            for col_index in range(start, end + 1):
+                self._header_selected_columns.add(col_index)
+        elif is_ctrl:
+            if logical_index in self._header_selected_columns:
+                self._header_selected_columns.remove(logical_index)
+            else:
+                self._header_selected_columns.add(logical_index)
+            self._last_header_clicked_column = logical_index
+        else:
+            self._header_selected_columns = {logical_index}
+            self._last_header_clicked_column = logical_index
+
+        if not self._header_selected_columns:
+            self._header_selected_columns = {logical_index}
+            self._last_header_clicked_column = logical_index
+
+        selected_columns = sorted(self._header_selected_columns)
+
+        selection_model = self.main_window.table_view.selectionModel()
+        model = self.main_window.table_view.model()
+        if selection_model and model and model.rowCount() > 0:
+            selection_model.clearSelection()
+            for col_index in selected_columns:
+                index = model.index(0, col_index)
+                selection_model.select(
+                    index,
+                    QItemSelectionModel.SelectionFlag.Columns | QItemSelectionModel.SelectionFlag.Select,
+                )
+
+        return selected_columns
 
     def on_binary_values_changed(self, true_val, false_val):
         try:
@@ -379,12 +427,41 @@ with error handling for generation and execution issues."""
     def on_header_clicked(self, logical_index):
         """Handle clicks on column headers to show column options, including encoding and binning settings, and update stats display."""
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectColumns)
-        self.main_window.table_view.selectColumn(logical_index)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        selected_columns = self._update_header_selection(logical_index)
+
+        selected_uuids = []
+        selected_names = []
+        for col_index in selected_columns:
+            selected_uuid = self.model.get_column_uuid(col_index)
+            if not selected_uuid:
+                continue
+            selected_uuids.append(selected_uuid)
+            selected_names.append(self.manager.df_wrapper.get_col_name_by_uuid(selected_uuid) or f"Column {col_index}")
+
+        if len(selected_uuids) > 1:
+            all_binary = all(self.manager.is_binary_column(col_uuid) for col_uuid in selected_uuids)
+            self.main_window.set_panel("column")
+            self.main_window.column_options.set_multi_column_mode(selected_uuids, selected_names, all_binary)
+
+            self.main_window.column_options.set_stats(
+                f"Selected columns: {len(selected_uuids)}\n"
+                "Rule:\n"
+                "- Any True in selected columns -> merged value is True\n"
+                "- All False -> merged value is False"
+            )
+            self.main_window.table_view.setFocus()
+            return
+
+        logical_index = selected_columns[0]
+        self._header_selected_columns = {logical_index}
+        self._last_header_clicked_column = logical_index
 
         uuid = self.model.get_column_uuid(logical_index)
         if not uuid: return
 
         self.main_window.set_panel("column")
+        self.main_window.column_options.set_single_column_mode()
         wrapper = self.manager.df_wrapper
         col_name = wrapper.get_col_name_by_uuid(uuid)
         
@@ -543,7 +620,10 @@ with error handling for invalid operations."""
             QApplication.beep()
 
     def on_row_clicked(self, logical_index):
+        self._header_selected_columns.clear()
+        self._last_header_clicked_column = None
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.main_window.table_view.selectRow(logical_index)
 
         self.main_window.set_panel("row")
@@ -552,7 +632,10 @@ with error handling for invalid operations."""
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
+        self._header_selected_columns.clear()
+        self._last_header_clicked_column = None
         self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         selection_model = self.main_window.table_view.selectionModel()
         if selection_model:
             selection_model.setCurrentIndex(
@@ -660,6 +743,16 @@ with error handling for invalid operations."""
         except Exception:
             QApplication.beep()
 
+    def on_binary_merge(self, source_uuids, new_col_name, delete_source_columns):
+        try:
+            self.manager.add_binary_column_merge(source_uuids, new_col_name, delete_source_columns=delete_source_columns)
+            self.main_window.set_panel("general")
+            self.refresh_view()
+        except ValueError as e:
+            QMessageBox.warning(self.main_window, "Binary Merge Error", str(e))
+        except Exception:
+            QApplication.beep()
+
     def on_delete_pressed(self):
         panel = self.main_window.left_layout.currentWidget()
         if panel == self.main_window.column_options:
@@ -712,6 +805,8 @@ with error handling for invalid operations."""
         """Refresh the table view and update stats display based on the current state of the DataFrame, 
 ensuring that the UI reflects any changes from transformations or data edits."""
         self.model.update_wrapper(self.manager.df_wrapper)
+        self._header_selected_columns.clear()
+        self._last_header_clicked_column = None
         self._update_menu_action_states()
         has_loaded_df = self.manager.df_wrapper.df is not None
         self.main_window.show_table_placeholder(not has_loaded_df)

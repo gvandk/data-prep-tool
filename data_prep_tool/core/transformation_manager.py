@@ -8,6 +8,7 @@ from data_prep_tool.transformation.row_delete_transformation import RowDeleteTra
 from data_prep_tool.transformation.row_add_transformation import RowAddTransformation
 from data_prep_tool.transformation.col_delete_transformation import ColDeleteTransformation
 from data_prep_tool.transformation.col_add_transformation import ColAddTransformation
+from data_prep_tool.transformation.col_merge_transformation import BinaryColumnMergeTransformation
 from .dependency_graph import DependencyGraph
 
 from typing import List, Tuple
@@ -196,6 +197,40 @@ class TransformationManager:
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
         self.redo.clear()
 
+    def is_binary_column(self, col_uuid: str) -> bool:
+        """Return True when the selected column contains only binary-like values and nulls."""
+        series = self.df_wrapper.get_col_data_by_uuid(col_uuid)
+        if series is None:
+            return False
+        return self._is_binary_like_series(
+            series,
+            self.binary_true,
+            self.binary_false,
+            self.binary_true,
+            self.binary_false,
+        )
+
+    def add_binary_column_merge(self, source_col_uuids: list[str], new_col_name: str, delete_source_columns: bool = True):
+        unique_source_uuids = list(dict.fromkeys(source_col_uuids or []))
+        if len(unique_source_uuids) < 2:
+            raise ValueError("Please select at least two columns for binary merge.")
+
+        for source_uuid in unique_source_uuids:
+            if not self.is_binary_column(source_uuid):
+                source_name = self.df_wrapper.get_col_name_by_uuid(source_uuid) or source_uuid
+                raise ValueError(f"Column '{source_name}' is not binary and cannot be merged.")
+
+        transformation = BinaryColumnMergeTransformation(
+            unique_source_uuids,
+            new_col_name,
+            true_label=self.binary_true,
+            false_label=self.binary_false,
+            delete_source_columns=delete_source_columns,
+        )
+        self.df_wrapper = transformation.apply(self.df_wrapper)
+        self.history.append(transformation)
+        self.redo.clear()
+
     def undo_transformation(self):
         """Undoes the last transformation, if possible."""
         if not self.history:
@@ -302,6 +337,21 @@ class TransformationManager:
                         transformation.col_name,
                         transformation.default_value
                     )
+
+                elif isinstance(transformation, BinaryColumnMergeTransformation):
+                    if not transformation.new_col_uuid:
+                        continue
+                    graph.register_binary_merge(
+                        new_col_uuid=transformation.new_col_uuid,
+                        new_col_name=transformation.new_col_name,
+                        source_col_uuids=transformation.source_col_uuids,
+                        true_label=transformation.true_label,
+                        false_label=transformation.false_label,
+                        delete_source_columns=transformation.delete_source_columns,
+                    )
+                    if transformation.delete_source_columns:
+                        for source_uuid in transformation.source_col_uuids:
+                            graph.mark_deleted(source_uuid)
 
                 elif isinstance(transformation, RowDeleteTransformation):
                     graph.register_row_delete(transformation.row_index)
