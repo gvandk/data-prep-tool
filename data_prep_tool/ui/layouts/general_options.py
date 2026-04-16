@@ -25,8 +25,16 @@ class GeneralPanel(QWidget):
         # Stats
         self.row_count_label = QLabel("Number of rows: 0")
         self.column_count_label = QLabel("Number of columns: 0")
+        self.missing_values_label = QLabel("Total missing values: 0")
+        self.column_types_title_label = QLabel("Column data types:")
+        self.column_types_title_label.setFont(font)
+        self.column_types_label = QLabel("(none)")
+        self.column_types_label.setWordWrap(True)
         layout.addWidget(self.row_count_label)
         layout.addWidget(self.column_count_label)
+        layout.addWidget(self.missing_values_label)
+        layout.addWidget(self.column_types_title_label)
+        layout.addWidget(self.column_types_label)
         
         layout.addSpacing(20)
 

@@ -184,6 +184,50 @@ class TestIntegration(unittest.TestCase):
         self.assertIn('YES: 2', stats)
         self.assertIn('NO: 1', stats)
 
+    def test_calculate_stats_reports_categorical_top_counts(self):
+        """Categorical stats should include top values with their counts."""
+        class DummyManager:
+            binary_true = 'YES'
+            binary_false = 'NO'
+
+        class DummyController:
+            pass
+
+        dummy = DummyController()
+        dummy.manager = DummyManager()
+        dummy._get_binary_counts = lambda series: MainController._get_binary_counts(dummy, series)
+        dummy._build_categorical_top_counts = lambda series: MainController._build_categorical_top_counts(dummy, series)
+        dummy._format_category_label = lambda value, max_len=32: MainController._format_category_label(dummy, value, max_len)
+
+        stats = MainController._calculate_stats(dummy, pd.Series(['A', 'A', 'B', 'C', None]))
+
+        self.assertIn('Type: Categorical', stats)
+        self.assertIn('Top Values (count):', stats)
+        self.assertIn('- A: 2', stats)
+        self.assertIn('- B: 1', stats)
+        self.assertIn('- C: 1', stats)
+
+    def test_calculate_stats_categorical_top_counts_all_missing(self):
+        """Categorical top-counts should handle all-null columns without crashing."""
+        class DummyManager:
+            binary_true = 'YES'
+            binary_false = 'NO'
+
+        class DummyController:
+            pass
+
+        dummy = DummyController()
+        dummy.manager = DummyManager()
+        dummy._get_binary_counts = lambda series: MainController._get_binary_counts(dummy, series)
+        dummy._build_categorical_top_counts = lambda series: MainController._build_categorical_top_counts(dummy, series)
+        dummy._format_category_label = lambda value, max_len=32: MainController._format_category_label(dummy, value, max_len)
+
+        stats = MainController._calculate_stats(dummy, pd.Series([None, None], dtype='object'))
+
+        self.assertIn('Type: Categorical', stats)
+        self.assertIn('Top Values (count):', stats)
+        self.assertIn('No non-missing values.', stats)
+
     def test_binary_label_update_relabels_numpy_boolean_scalars(self):
         """Regression: relabeling should work for NumPy bool scalars immediately after load."""
         df = pd.DataFrame({

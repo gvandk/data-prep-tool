@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import numpy as np
 import pandas as pd
 from PyQt6.QtWidgets import QApplication
 
@@ -99,6 +100,47 @@ class TestMainControllerMenuState(unittest.TestCase):
 
         self.assertFalse(self.window.action_undo.isEnabled())
         self.assertTrue(self.window.action_redo.isEnabled())
+
+
+class TestMainControllerGeneralInfoStats(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        df = pd.DataFrame(
+            {
+                "A": [1, np.nan],
+                "B": ["x", "y"],
+                "C": [True, False],
+                "D": ["True", "False"],
+            }
+        )
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+        self.window = MainWindow()
+        self.controller = MainController(self.window, manager)
+
+    def tearDown(self):
+        self.window.close()
+
+    def test_general_panel_shows_missing_values_and_column_dtypes(self):
+        self.controller.refresh_view()
+
+        self.assertEqual(self.window.general_options.missing_values_label.text(), "Total missing values: 1")
+        self.assertTrue(self.window.general_options.column_types_title_label.font().bold())
+        dtype_text = self.window.general_options.column_types_label.text()
+        self.assertIn('"A": float64', dtype_text)
+        self.assertIn('"B": object', dtype_text)
+        self.assertIn('"C": bool', dtype_text)
+        self.assertIn('"D": binary', dtype_text)
+
+    def test_general_panel_keeps_binary_dtype_after_custom_label_change(self):
+        self.controller.on_binary_values_changed("Apple", "Banana")
+
+        dtype_text = self.window.general_options.column_types_label.text()
+        self.assertIn('"D": binary', dtype_text)
+        self.assertNotIn('"D": object', dtype_text)
 
 
 class TestMainControllerRowDeleteSelection(unittest.TestCase):

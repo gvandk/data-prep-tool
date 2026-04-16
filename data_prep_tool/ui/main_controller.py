@@ -1,5 +1,4 @@
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QMessageBox,
     QApplication,
     QAbstractItemView,
@@ -9,30 +8,57 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QLineEdit,
 )
-from PyQt6.QtCore import QItemSelectionModel, Qt
+from PyQt6.QtCore import QItemSelectionModel
 import pandas as pd
-import subprocess
-import sys
-import tempfile
-from pathlib import Path
 
 from data_prep_tool.models.table_model import DataFrameModel
 from data_prep_tool.core.transformation_manager import TransformationManager
-from data_prep_tool.core.script_generator import ScriptGenerator
 from data_prep_tool.transformation.col_reorder_transformation import ColumnReorderTransformation
 from data_prep_tool.transformation.binning_transformation import BinningTransformation
 from data_prep_tool.transformation.one_hot_encode import oneHotEncodeTransformation
-from data_prep_tool.core.data_loader import load_csv
+from data_prep_tool.ui.load_export import (
+    choose_input_csv_path,
+    load_manager_from_csv,
+    generate_script_from_manager,
+    choose_script_export_path,
+    write_script_file,
+    validate_export_input_path,
+    choose_output_csv_path,
+    export_csv_with_script,
+)
+from data_prep_tool.ui.selection_state import (
+    clear_row_selection_state,
+    clear_header_selection_state,
+    reset_all_selection_state,
+    set_single_selection_mode,
+    set_column_extended_selection_mode,
+    set_row_extended_selection_mode,
+    set_item_single_selection_mode,
+    select_single_index,
+    update_header_selection_from_click,
+    update_row_selection_from_click,
+)
+from data_prep_tool.ui.stats import (
+    calculate_stats,
+    build_categorical_top_counts,
+    format_category_label,
+    get_binary_counts,
+    build_child_column_stats,
+    get_display_dtype,
+    build_general_stats_summary,
+)
 
 
 
 class MainController:
-    """Controller for the main application window, handling user interactions and coordinating between the UI and the TransformationManager."""
+    """Controller for the main application window, 
+    handling user interactions and coordinating between the UI and the TransformationManager."""
     ONE_HOT_WARN_UNIQUE_THRESHOLD = 2000
     ONE_HOT_WARN_MATRIX_CELLS_THRESHOLD = 10_000_000
     ONE_HOT_BLOCK_UNIQUE_THRESHOLD = 5000
     ONE_HOT_BLOCK_MATRIX_CELLS_THRESHOLD = 50_000_000
 
+    # Initialization + signal wiring
     def __init__(self, main_window, transformation_manager):
         self.main_window = main_window
         self.manager = transformation_manager
@@ -89,6 +115,8 @@ class MainController:
 
         self.refresh_view()
 
+
+    # Shared parsing and validation helpers
     def _set_type(self, input):
         """Helper method to convert string input into appropriate type (int, float, bool, or str)."""
         try:
@@ -171,6 +199,13 @@ class MainController:
         except (ValueError, TypeError):
             return False
 
+    def _get_display_dtype(self, col_name: str, series: pd.Series) -> str:
+        col_uuid = self.manager.df_wrapper.get_uuid_by_name(col_name)
+        is_binary_column = col_uuid is not None and self.manager.is_binary_column(col_uuid)
+        return get_display_dtype(series, is_binary_column)
+
+
+    # Selection state and panel-mode helpers
     def _update_menu_action_states(self):
         """Enable only the menu actions that are currently possible."""
         has_loaded_df = self.manager.df_wrapper.df is not None
@@ -183,99 +218,32 @@ class MainController:
 
     def on_panel_close(self):
         self.main_window.set_panel("general")
-        self.main_window.table_view.clearSelection()
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self._selected_rows.clear()
-        self._last_row_clicked = None
-        self._header_selected_columns.clear()
-        self._last_header_clicked_column = None
-        self._active_row_index = -1
+        set_single_selection_mode(self.main_window.table_view)
+        (
+            self._last_row_clicked,
+            self._last_header_clicked_column,
+            self._active_row_index,
+        ) = reset_all_selection_state(self._selected_rows, self._header_selected_columns)
         self.main_window.row_options.set_rows([])
 
     def _update_header_selection(self, logical_index: int) -> list[int]:
         """Update selected columns from a header click and return sorted selected indices."""
-        modifiers = QApplication.keyboardModifiers()
-        is_ctrl = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
-        is_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
-
-        if is_shift and self._last_header_clicked_column is not None:
-            start = min(self._last_header_clicked_column, logical_index)
-            end = max(self._last_header_clicked_column, logical_index)
-            if not is_ctrl:
-                self._header_selected_columns.clear()
-            for col_index in range(start, end + 1):
-                self._header_selected_columns.add(col_index)
-        elif is_ctrl:
-            if logical_index in self._header_selected_columns:
-                self._header_selected_columns.remove(logical_index)
-            else:
-                self._header_selected_columns.add(logical_index)
-            self._last_header_clicked_column = logical_index
-        else:
-            self._header_selected_columns = {logical_index}
-            self._last_header_clicked_column = logical_index
-
-        if not self._header_selected_columns:
-            self._header_selected_columns = {logical_index}
-            self._last_header_clicked_column = logical_index
-
-        selected_columns = sorted(self._header_selected_columns)
-
-        selection_model = self.main_window.table_view.selectionModel()
-        model = self.main_window.table_view.model()
-        if selection_model and model and model.rowCount() > 0:
-            selection_model.clearSelection()
-            for col_index in selected_columns:
-                index = model.index(0, col_index)
-                selection_model.select(
-                    index,
-                    QItemSelectionModel.SelectionFlag.Columns | QItemSelectionModel.SelectionFlag.Select,
-                )
-
+        selected_columns, self._last_header_clicked_column = update_header_selection_from_click(
+            logical_index,
+            self._header_selected_columns,
+            self._last_header_clicked_column,
+            self.main_window.table_view,
+        )
         return selected_columns
 
     def _update_row_selection(self, logical_index: int) -> list[int]:
         """Update selected rows from a row-header click and return sorted selected indices."""
-        modifiers = QApplication.keyboardModifiers()
-        is_ctrl = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
-        is_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
-
-        if is_shift and self._last_row_clicked is not None:
-            start = min(self._last_row_clicked, logical_index)
-            end = max(self._last_row_clicked, logical_index)
-            if not is_ctrl:
-                self._selected_rows.clear()
-            for row_index in range(start, end + 1):
-                self._selected_rows.add(row_index)
-        elif is_ctrl:
-            if logical_index in self._selected_rows:
-                self._selected_rows.remove(logical_index)
-            else:
-                self._selected_rows.add(logical_index)
-            self._last_row_clicked = logical_index
-        else:
-            self._selected_rows = {logical_index}
-            self._last_row_clicked = logical_index
-
-        if not self._selected_rows:
-            self._selected_rows = {logical_index}
-            self._last_row_clicked = logical_index
-
-        selected_rows = sorted(self._selected_rows)
-
-        selection_model = self.main_window.table_view.selectionModel()
-        model = self.main_window.table_view.model()
-        if selection_model and model and model.columnCount() > 0:
-            selection_model.clearSelection()
-            for row_index in selected_rows:
-                if row_index >= model.rowCount():
-                    continue
-                index = model.index(row_index, 0)
-                selection_model.select(
-                    index,
-                    QItemSelectionModel.SelectionFlag.Rows | QItemSelectionModel.SelectionFlag.Select,
-                )
-
+        selected_rows, self._last_row_clicked = update_row_selection_from_click(
+            logical_index,
+            self._selected_rows,
+            self._last_row_clicked,
+            self.main_window.table_view,
+        )
         return selected_rows
 
     def on_binary_values_changed(self, true_val, false_val):
@@ -289,59 +257,17 @@ class MainController:
         self.model.set_view_settings(max_rows, decimal_places)
         self.refresh_view()
 
-    def _ensure_row_is_visible_in_view(self, row_index: int):
-        """Expand max visible rows when needed so the target row can be displayed."""
-        if row_index < 0:
-            return
-
-        required_rows = row_index + 1
-        if required_rows <= self.model.max_rows:
-            return
-
-        self.model.set_view_settings(required_rows, self.model.float_precision)
-
-        max_rows_input = self.main_window.general_options.max_rows_input
-        previous_block_state = max_rows_input.blockSignals(True)
-        max_rows_input.setText(str(required_rows))
-        max_rows_input.blockSignals(previous_block_state)
-
-    def _focus_new_row(self, row_index: int):
-        """Highlight and center the requested row in the table view."""
-        model = self.main_window.table_view.model()
-        if model is None:
-            return
-        if row_index < 0 or row_index >= model.rowCount() or model.columnCount() == 0:
-            return
-
-        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-
-        target_index = model.index(row_index, 0)
-        selection_model = self.main_window.table_view.selectionModel()
-        if selection_model:
-            selection_model.setCurrentIndex(
-                target_index,
-                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
-            )
-        self.main_window.table_view.scrollTo(target_index, QAbstractItemView.ScrollHint.PositionAtCenter)
-        self.main_window.table_view.setFocus()
-
+    # --- File load/export actions ---
     def open_csv(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self.main_window, "Open CSV File", "", "CSV Files (*.csv)"
-        )
+        file_path = choose_input_csv_path(self.main_window)
         if file_path:
             self.load_csv_from_path(file_path)
 
     def load_csv_from_path(self, file_path: str):
         try:
-            new_wrapper = load_csv(file_path)
-            self.manager = TransformationManager(new_wrapper)
-
-            # Preserve currently configured binary labels across loaded datasets.
             true_label = self.main_window.general_options.true_input.text()
             false_label = self.main_window.general_options.false_input.text()
-            self.manager.update_binary_labels(true_label, false_label)
+            self.manager = load_manager_from_csv(file_path, true_label, false_label)
 
             self.current_input_csv_path = file_path
             self.model.update_wrapper(self.manager.df_wrapper)
@@ -354,14 +280,10 @@ class MainController:
         """Generates a Python script representing the current transformations and allows the user to save it, 
 with error handling for generation issues."""
         try:
-            graph = self.manager.build_dependency_graph()
-            generator = ScriptGenerator(graph, history=self.manager.history)
-            visual_order = self.manager.df_wrapper.get_all_uuids()
-            script = generator.generate_script(final_col_uuids=visual_order)
-            
-            path, _ = QFileDialog.getSaveFileName(self.main_window, "Save Script", "cleaning_script.py", "Python (*.py)")
+            script = generate_script_from_manager(self.manager)
+            path = choose_script_export_path(self.main_window)
             if path:
-                with open(path, "w") as f: f.write(script)
+                write_script_file(path, script)
                 QMessageBox.information(self.main_window, "Success", f"Script exported to:\n{path}")
         except Exception:
             QMessageBox.warning(self.main_window, "Export Error", "Failed to generate script.\nPlease ensure all transformations are valid.")
@@ -369,45 +291,25 @@ with error handling for generation issues."""
     def export_csv(self):
         """Generates a Python script to apply transformations and runs it to export the current DataFrame state to a new CSV file, 
 with error handling for generation and execution issues."""
-        if not self.current_input_csv_path:
-            QMessageBox.warning(self.main_window, "Export CSV Error", "Please load a CSV file first.")
+        input_error = validate_export_input_path(self.current_input_csv_path)
+        if input_error:
+            QMessageBox.warning(self.main_window, "Export CSV Error", input_error)
             return
 
-        if not Path(self.current_input_csv_path).exists():
-            QMessageBox.warning(self.main_window, "Export CSV Error", "The original input CSV file was not found.")
-            return
-
-        default_name = f"{Path(self.current_input_csv_path).stem}_output.csv"
-        output_path, _ = QFileDialog.getSaveFileName(
-            self.main_window,
-            "Save Output CSV",
-            default_name,
-            "CSV Files (*.csv)"
-        )
+        output_path = choose_output_csv_path(self.main_window, self.current_input_csv_path)
 
         if not output_path:
             return
 
-        temp_script_path = None
         try:
-            graph = self.manager.build_dependency_graph()
-            generator = ScriptGenerator(graph, history=self.manager.history)
-            visual_order = self.manager.df_wrapper.get_all_uuids()
-            script = generator.generate_script(final_col_uuids=visual_order)
-
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as temp_script:
-                temp_script.write(script)
-                temp_script_path = temp_script.name
-
-            result = subprocess.run(
-                [sys.executable, temp_script_path, self.current_input_csv_path, output_path],
-                capture_output=True,
-                text=True,
-                check=False
+            script = generate_script_from_manager(self.manager)
+            success, error_text = export_csv_with_script(
+                script,
+                self.current_input_csv_path,
+                output_path,
             )
 
-            if result.returncode != 0:
-                error_text = (result.stderr or result.stdout or "Unknown script execution error.").strip()
+            if not success:
                 QMessageBox.warning(
                     self.main_window,
                     "Export CSV Error",
@@ -418,122 +320,42 @@ with error handling for generation and execution issues."""
             QMessageBox.information(self.main_window, "Success", f"CSV exported to:\n{output_path}")
         except Exception:
             QMessageBox.warning(self.main_window, "Export CSV Error", "Failed to generate or run export script.")
-        finally:
-            if temp_script_path and Path(temp_script_path).exists():
-                try:
-                    Path(temp_script_path).unlink()
-                except OSError:
-                    pass
 
+
+    # Column stats and summary delegates
     def _calculate_stats(self, series: pd.Series) -> str:
         """Helper method to calculate and format statistics for a given pandas Series, handling both numeric and categorical data,
  as well as empty or null series."""
-        if series is None or series.empty: return "No data."
-        total = len(series)
-        nulls = series.isnull().sum()
-        stats = f"Total Rows: {total}\nMissing: {nulls}\n"
+        return calculate_stats(series, self.manager.binary_true, self.manager.binary_false)
 
-        binary_counts = self._get_binary_counts(series)
-        if binary_counts is not None:
-            true_count, false_count = binary_counts
-            stats += (
-                "Type: Binary\n"
-                f"{self.manager.binary_true}: {true_count}\n"
-                f"{self.manager.binary_false}: {false_count}"
-            )
-            return stats
+    def _build_categorical_top_counts(self, series: pd.Series, top_n: int = 5) -> str:
+        """Build a compact top-values summary for categorical distributions."""
+        return build_categorical_top_counts(series, top_n=top_n)
 
-        if pd.api.types.is_numeric_dtype(series):
-            try:
-                d = series.describe()
-                stats += f"Type: Numeric\nMean: {d['mean']:.4f}\nMin: {d['min']}\nMax: {d['max']}"
-            except: stats += "Error calc stats"
-        else:
-            try:
-                stats += f"Type: Categorical\nUnique: {series.nunique()}"
-            except: stats += "Error calc stats"
-        return stats
+    def _format_category_label(self, value, max_len: int = 32) -> str:
+        """Convert values to short labels suitable for compact categorical summaries."""
+        return format_category_label(value, max_len=max_len)
 
     def _get_binary_counts(self, series: pd.Series):
         """Return (true_count, false_count) when a series is binary-like, else None."""
-        if series is None:
-            return None
-
-        true_label = self.manager.binary_true
-        false_label = self.manager.binary_false
-
-        true_count = 0
-        false_count = 0
-        saw_binary_value = False
-
-        for value in series.dropna():
-            if isinstance(value, bool):
-                saw_binary_value = True
-                if value:
-                    true_count += 1
-                else:
-                    false_count += 1
-                continue
-
-            if isinstance(value, (int, float)) and value in (0, 1):
-                saw_binary_value = True
-                if value == 1:
-                    true_count += 1
-                else:
-                    false_count += 1
-                continue
-
-            if isinstance(value, str):
-                token = value.strip()
-                lowered = token.casefold()
-
-                if lowered in ("true", "1") or token == true_label:
-                    saw_binary_value = True
-                    true_count += 1
-                    continue
-
-                if lowered in ("false", "0") or token == false_label:
-                    saw_binary_value = True
-                    false_count += 1
-                    continue
-
-            return None
-
-        if not saw_binary_value:
-            return None
-        return true_count, false_count
+        return get_binary_counts(series, self.manager.binary_true, self.manager.binary_false)
 
     def _build_child_column_stats(self, parent_name: str, parent_series: pd.Series, child_name: str, child_series: pd.Series) -> str:
         """Build combined stats text for expanded child columns (parent context + child binary details)."""
-        parent_label = parent_name or "Parent"
-        child_label = child_name or "Expanded Column"
-
-        parent_stats = self._calculate_stats(parent_series)
-
-        binary_counts = self._get_binary_counts(child_series)
-        if binary_counts is not None:
-            true_count, false_count = binary_counts
-            child_stats = (
-                "Type: Binary\n"
-                f"{self.manager.binary_true}: {true_count}\n"
-                f"{self.manager.binary_false}: {false_count}"
-            )
-        else:
-            child_stats = self._calculate_stats(child_series)
-
-        return (
-            f"Parent Column ({parent_label})\n"
-            f"{parent_stats}\n\n"
-            f"Expanded Column ({child_label})\n"
-            f"{child_stats}"
+        return build_child_column_stats(
+            parent_name,
+            parent_series,
+            child_name,
+            child_series,
+            self.manager.binary_true,
+            self.manager.binary_false,
         )
 
     def on_header_clicked(self, logical_index):
         """Handle clicks on column headers to show column options, including encoding and binning settings, and update stats display."""
-        self._selected_rows.clear()
+        clear_row_selection_state(self._selected_rows)
         self._last_row_clicked = None
-        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectColumns)
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        set_column_extended_selection_mode(self.main_window.table_view)
         selected_columns = self._update_header_selection(logical_index)
 
         selected_uuids = []
@@ -651,6 +473,8 @@ with error handling for generation and execution issues."""
         self.main_window.column_options.set_current_uuid(uuid)
         self.main_window.table_view.setFocus()
 
+
+    # Encoding and transformation strategy handlers
     def on_binning_change(self, uuid, strategy, n_bins, cutoffs):
         """Handle changes in binning strategy for a column, including validation of parameters and ensuring the column is numeric 
 before applying binning transformations."""
@@ -727,10 +551,9 @@ with error handling for invalid operations."""
             QApplication.beep()
 
     def on_row_clicked(self, logical_index):
-        self._header_selected_columns.clear()
+        clear_header_selection_state(self._header_selected_columns)
         self._last_header_clicked_column = None
-        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        set_row_extended_selection_mode(self.main_window.table_view)
         selected_rows = self._update_row_selection(logical_index)
 
         self.main_window.set_panel("row")
@@ -739,18 +562,12 @@ with error handling for invalid operations."""
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
-        self._selected_rows.clear()
+        clear_row_selection_state(self._selected_rows)
         self._last_row_clicked = None
-        self._header_selected_columns.clear()
+        clear_header_selection_state(self._header_selected_columns)
         self._last_header_clicked_column = None
-        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
-        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        selection_model = self.main_window.table_view.selectionModel()
-        if selection_model:
-            selection_model.setCurrentIndex(
-                index,
-                QItemSelectionModel.SelectionFlag.ClearAndSelect,
-            )
+        set_item_single_selection_mode(self.main_window.table_view)
+        select_single_index(self.main_window.table_view, index)
         self.main_window.set_panel("cell")
         self._active_row_index = index.row()
         uuid = self.model.get_column_uuid(index.column())
@@ -762,6 +579,8 @@ with error handling for invalid operations."""
         self.main_window.cell_options.column_rename.uuid = uuid
         self.main_window.table_view.setFocus()
 
+
+    # Column and cell mutation handlers
     def on_column_rename(self, uuid, new_name):
         all_uuids = self.manager.df_wrapper.get_all_uuids()
         
@@ -830,6 +649,45 @@ with error handling for invalid operations."""
                 self._apply_reorder(current_uuids)
         except ValueError:
             QApplication.beep()
+
+
+    # Row/column creation and deletion helpers 
+    def _ensure_row_is_visible_in_view(self, row_index: int):
+        """Expand max visible rows when needed so the target row can be displayed."""
+        if row_index < 0:
+            return
+
+        required_rows = row_index + 1
+        if required_rows <= self.model.max_rows:
+            return
+
+        self.model.set_view_settings(required_rows, self.model.float_precision)
+
+        max_rows_input = self.main_window.general_options.max_rows_input
+        previous_block_state = max_rows_input.blockSignals(True)
+        max_rows_input.setText(str(required_rows))
+        max_rows_input.blockSignals(previous_block_state)
+
+    def _focus_new_row(self, row_index: int):
+        """Highlight and center the requested row in the table view."""
+        model = self.main_window.table_view.model()
+        if model is None:
+            return
+        if row_index < 0 or row_index >= model.rowCount() or model.columnCount() == 0:
+            return
+
+        self.main_window.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.main_window.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+
+        target_index = model.index(row_index, 0)
+        selection_model = self.main_window.table_view.selectionModel()
+        if selection_model:
+            selection_model.setCurrentIndex(
+                target_index,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+            )
+        self.main_window.table_view.scrollTo(target_index, QAbstractItemView.ScrollHint.PositionAtCenter)
+        self.main_window.table_view.setFocus()
 
     def on_add_row(self):
         if self.manager.df_wrapper.df is None:
@@ -943,6 +801,8 @@ with error handling for invalid operations."""
         else:
             QApplication.beep()
 
+
+    # History, ordering, and view refresh
     def _apply_reorder(self, new_order):
         """Helper method to apply column reorder transformation and update the view accordingly."""
         transformation = ColumnReorderTransformation(new_order)
@@ -990,3 +850,23 @@ ensuring that the UI reflects any changes from transformations or data edits."""
         col_count = self.model.columnCount()
         self.main_window.general_options.row_count_label.setText(f"Number of rows: {row_count}")
         self.main_window.general_options.column_count_label.setText(f"Number of columns: {col_count}")
+
+        if has_loaded_df:
+            df = self.manager.df_wrapper.df
+
+            def _is_binary_column_name(column_name: str) -> bool:
+                col_uuid = self.manager.df_wrapper.get_uuid_by_name(column_name)
+                return col_uuid is not None and self.manager.is_binary_column(col_uuid)
+
+            total_missing_values, dtype_text = build_general_stats_summary(
+                df,
+                _is_binary_column_name,
+            )
+        else:
+            total_missing_values = 0
+            dtype_text = "(none)"
+
+        self.main_window.general_options.missing_values_label.setText(
+            f"Total missing values: {total_missing_values}"
+        )
+        self.main_window.general_options.column_types_label.setText(dtype_text)
