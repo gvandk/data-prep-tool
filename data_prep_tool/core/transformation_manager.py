@@ -9,6 +9,7 @@ from data_prep_tool.transformation.row_add_transformation import RowAddTransform
 from data_prep_tool.transformation.col_delete_transformation import ColDeleteTransformation
 from data_prep_tool.transformation.col_add_transformation import ColAddTransformation
 from data_prep_tool.transformation.col_merge_transformation import BinaryColumnMergeTransformation
+from data_prep_tool.transformation.col_filter_transformation import RowValueFilterTransformation
 from .dependency_graph import DependencyGraph
 
 from typing import List, Tuple
@@ -114,6 +115,19 @@ class TransformationManager:
             series = self.df_wrapper.df[col_name]
             if self._is_binary_like_series(series, true_val, false_val, old_true, old_false):
                 self.df_wrapper.df[col_name] = series.replace(replace_map)
+
+    def _update_binary_filter_labels(self, transformation, true_val: str, false_val: str):
+        """Keep value-based row filters aligned with updated binary labels."""
+        if not isinstance(transformation, RowValueFilterTransformation):
+            return
+
+        transformation.true_label = true_val
+        transformation.false_label = false_val
+
+        if transformation.binary_flag is None:
+            return
+
+        transformation.filtered_value = true_val if transformation.binary_flag else false_val
     
     def update_binary_labels(self, true_val, false_val):
         """Update binary labels for one-hot/binning columns in place using UUID-targeted relabeling."""
@@ -128,6 +142,7 @@ class TransformationManager:
 
         for trans in self.history:
             if not isinstance(trans, (oneHotEncodeTransformation, BinningTransformation)):
+                self._update_binary_filter_labels(trans, true_val, false_val)
                 continue
 
             old_true = trans.true_label
@@ -147,6 +162,13 @@ class TransformationManager:
                 if not child_name or child_name not in self.df_wrapper.df.columns:
                     continue
                 self.df_wrapper.df[child_name] = self.df_wrapper.df[child_name].replace(replace_map)
+
+        for trans in self.redo:
+            if isinstance(trans, (oneHotEncodeTransformation, BinningTransformation)):
+                trans.true_label = true_val
+                trans.false_label = false_val
+            else:
+                self._update_binary_filter_labels(trans, true_val, false_val)
 
         self._relabel_binary_like_columns(true_val, false_val, old_global_true, old_global_false)
 
@@ -187,6 +209,35 @@ class TransformationManager:
 
         self.history.append(RowDeleteTransformation(normalized_indices))
         self.df_wrapper = self.history[-1].apply(self.df_wrapper)
+        self.redo.clear()
+
+    def add_row_filter_by_value(self, col_uuid: str, filtered_value):
+        series = self.df_wrapper.get_col_data_by_uuid(col_uuid)
+        if series is None:
+            raise ValueError("The selected column does not exist anymore.")
+
+        binary_flag = None
+        if self.is_binary_column(col_uuid):
+            coerced = self._coerce_binary_flag(
+                filtered_value,
+                self.binary_true,
+                self.binary_false,
+                self.binary_true,
+                self.binary_false,
+            )
+            if coerced is not None:
+                binary_flag = bool(coerced)
+                filtered_value = self.binary_true if binary_flag else self.binary_false
+
+        transformation = RowValueFilterTransformation(
+            col_uuid=col_uuid,
+            filtered_value=filtered_value,
+            true_label=self.binary_true,
+            false_label=self.binary_false,
+            binary_flag=binary_flag,
+        )
+        self.df_wrapper = transformation.apply(self.df_wrapper)
+        self.history.append(transformation)
         self.redo.clear()
 
     def add_row_add(self, default_value):
@@ -370,6 +421,15 @@ class TransformationManager:
                             graph.register_row_delete(row_index)
                     else:
                         graph.register_row_delete(transformation.row_index)
+
+                elif isinstance(transformation, RowValueFilterTransformation):
+                    graph.register_row_filter(
+                        transformation.col_uuid,
+                        transformation.filtered_value,
+                        binary_flag=transformation.binary_flag,
+                        true_label=transformation.true_label,
+                        false_label=transformation.false_label,
+                    )
 
                 elif isinstance(transformation, RowAddTransformation):
                     graph.register_row_add(transformation.default_value)

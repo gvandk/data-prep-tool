@@ -27,3 +27,13 @@ class TestDependencyGraph(unittest.TestCase):
         node = self.graph.get_node("uuid-1")
         # Current implementation applies edits but doesn't store in params
         self.assertIsNotNone(node)
+
+    def test_row_filter_registration(self):
+        self.graph.register_load("uuid-1", "Status")
+        self.graph.register_row_filter("uuid-1", "obsolete")
+
+        filter_nodes = [node for node in self.graph.nodes.values() if node.operation == "ROW_FILTER"]
+
+        self.assertEqual(len(filter_nodes), 1)
+        self.assertEqual(filter_nodes[0].parents, ["uuid-1"])
+        self.assertEqual(filter_nodes[0].params.get("value"), "obsolete")

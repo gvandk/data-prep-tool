@@ -21,6 +21,14 @@ class TestScriptGenerator(unittest.TestCase):
         self.assertIn("Error: Script failed during step:", script)
         self.assertIn("Reason:", script)
 
+    def test_binary_helpers_are_omitted_when_not_needed(self):
+        self.graph.register_load("u1", "Age")
+
+        script = self.generator.generate_script()
+
+        self.assertNotIn("def _to_binary_flag(value, true_label, false_label):", script)
+        self.assertNotIn("def _merge_binary_columns(df, source_cols, output_col, true_label, false_label, delete_sources=True):", script)
+
     def test_generated_script_tracks_operation_context_per_step(self):
         self.graph.register_load("u1", "Age")
         self.graph.register_rename("u1", "Years")
@@ -200,3 +208,22 @@ class TestScriptGenerator(unittest.TestCase):
                 "df = df.drop(index=0).reset_index(drop=True)",
             ],
         )
+
+    def test_row_filter_is_generated_as_single_compact_step(self):
+        self.graph.register_load("u1", "Status")
+        self.graph.register_row_filter("u1", "remove")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("mask = df['Status'] == 'remove'", script)
+        self.assertIn("df = df.loc[~mask].reset_index(drop=True)", script)
+        self.assertNotIn("df.drop(index=", script)
+
+    def test_binary_row_filter_uses_binary_normalization(self):
+        self.graph.register_load("u1", "Flag")
+        self.graph.register_row_filter("u1", "YES", binary_flag=True, true_label="YES", false_label="NO")
+
+        script = self.generator.generate_script()
+
+        self.assertIn("_to_binary_flag(value, 'YES', 'NO')", script)
+        self.assertIn(") == True", script)

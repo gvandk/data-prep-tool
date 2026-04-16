@@ -58,6 +58,7 @@ class MainController:
         # Connect column options panel signals
         col_panel = self.main_window.column_options
         col_panel.column_rename_request.connect(self.on_column_rename)
+        col_panel.column_filter_request.connect(self.on_column_filter_value)
         col_panel.encoder_options.column_encoding_request.connect(self.on_encoding_change)
         col_panel.encoder_options.column_binning_request.connect(self.on_binning_change)
         col_panel.encoder_options.child_rename_request.connect(self.on_column_rename)
@@ -518,6 +519,7 @@ with error handling for generation and execution issues."""
         
         self.main_window.column_options.column_rename.set_current_column(uuid, col_name)
         self.main_window.column_options.column_rename.uuid = uuid
+        self.main_window.column_options.column_filter.set_current_column(uuid, col_name)
         self.main_window.column_options.column_reorder.uuid = uuid
         self.main_window.column_options.column_reorder.set_current_index(uuid, str(logical_index))
 
@@ -732,6 +734,21 @@ with error handling for invalid operations."""
                 self.model.set_error_columns(error_indices)
             except Exception:
                 QApplication.beep()
+
+    def on_column_filter_value(self, uuid, raw_value):
+        parsed_value = self._set_type(raw_value.strip())
+
+        try:
+            self.manager.add_row_filter_by_value(uuid, parsed_value)
+            self.refresh_view()
+
+            all_uuids = self.manager.df_wrapper.get_all_uuids()
+            if uuid in all_uuids:
+                self.on_header_clicked(all_uuids.index(uuid))
+        except ValueError as e:
+            QMessageBox.warning(self.main_window, "Filter Error", str(e))
+        except Exception:
+            QApplication.beep()
 
     def on_cell_edit(self, uuid, new_value):
         if self._active_row_index != -1:

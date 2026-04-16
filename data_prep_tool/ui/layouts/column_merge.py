@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import QCheckBox, QGroupBox, QHBoxLayout, QLabel, QLineEdit
 
 
 class ColumnMerge(QWidget):
-    """Dedicated UI for merging multiple binary columns into one output column."""
 
     binary_merge_request = pyqtSignal(list, str, bool)
 

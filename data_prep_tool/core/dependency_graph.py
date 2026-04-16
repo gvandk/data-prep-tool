@@ -94,6 +94,22 @@ class DependencyGraph:
             params={"row_index": row_index}
         )
 
+    def register_row_filter(self, col_uuid: str, value, binary_flag: Optional[bool] = None, true_label: str = "True", false_label: str = "False"):
+        node_id = f"row_filter_{len(self.nodes)}"
+        self.nodes[node_id] = GraphNode(
+            uuid=node_id,
+            current_name="",
+            operation="ROW_FILTER",
+            parents=[col_uuid],
+            params={
+                "value": value,
+                "target_col_uuid": col_uuid,
+                "binary_flag": binary_flag,
+                "true_label": true_label,
+                "false_label": false_label,
+            },
+        )
+
     def register_row_add(self, default_value):
         self.nodes[f"row_add_{len(self.nodes)}"] = GraphNode(
             uuid=f"row_add_{len(self.nodes)}",

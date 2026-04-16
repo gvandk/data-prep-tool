@@ -2,12 +2,14 @@ from PyQt6.QtWidgets import (QHBoxLayout, QWidget, QLabel, QVBoxLayout, QPushBut
                              QGroupBox)
 from PyQt6.QtCore import pyqtSignal, Qt
 from .column_rename import ColumnRename
+from .column_filter import ColumnFilter
 from .column_encoding import ColumnEncoding
 from .column_order import ColumnOrder
 from .column_merge import ColumnMerge
 
 class ColumnPanel(QWidget):
     column_rename_request = pyqtSignal(str, str)
+    column_filter_request = pyqtSignal(str, str)
     column_encoding_request = pyqtSignal(str, str)
     column_binning_request = pyqtSignal(str, str, int, list)
     child_rename_request = pyqtSignal(str, str)
@@ -51,6 +53,9 @@ class ColumnPanel(QWidget):
         self.column_reorder = ColumnOrder()
         layout.addLayout(self.column_reorder)
 
+        self.column_filter = ColumnFilter()
+        layout.addWidget(self.column_filter)
+
         self.encoder_options = ColumnEncoding()
         layout.addWidget(self.encoder_options)
 
@@ -66,6 +71,7 @@ class ColumnPanel(QWidget):
         self.delete_btn.clicked.connect(self._on_delete)
         self.column_merge.binary_merge_request.connect(self.binary_merge_request.emit)
         self.column_rename.column_rename_request.connect(self.column_rename_request.emit)
+        self.column_filter.filter_value_request.connect(self.column_filter_request.emit)
         self.encoder_options.column_encoding_request.connect(self.column_encoding_request.emit)
         self.encoder_options.child_rename_request.connect(self.child_rename_request.emit)
         self.encoder_options.column_binning_request.connect(self.column_binning_request.emit)
@@ -93,6 +99,7 @@ class ColumnPanel(QWidget):
     def set_single_column_mode(self):
         self._set_layout_visible(self.column_rename, True)
         self._set_layout_visible(self.column_reorder, True)
+        self.column_filter.setVisible(True)
         self.encoder_options.setVisible(True)
         self.delete_btn.setVisible(True)
         self.column_merge.clear_selection()
@@ -103,6 +110,7 @@ class ColumnPanel(QWidget):
 
         self._set_layout_visible(self.column_rename, False)
         self._set_layout_visible(self.column_reorder, False)
+        self.column_filter.setVisible(False)
         self.encoder_options.setVisible(False)
         self.delete_btn.setVisible(False)
         self.column_merge.setVisible(True)

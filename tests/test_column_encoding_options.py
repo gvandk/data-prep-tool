@@ -10,6 +10,7 @@ from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from data_prep_tool.core.transformation_manager import TransformationManager
 from data_prep_tool.ui.main_controller import MainController
 from data_prep_tool.ui.main_window import MainWindow
+from data_prep_tool.ui.layouts.column_filter import ColumnFilter
 from data_prep_tool.ui.layouts.column_encoding import ColumnEncoding
 from data_prep_tool.ui.layouts.column_options import ColumnPanel
 from data_prep_tool.ui.layouts.row_options import RowPanel
@@ -49,6 +50,23 @@ class TestColumnEncodingOptions(unittest.TestCase):
             ["None", "One-Hot", "Equal Width", "Equal Frequency", "Ordinal", "Custom"],
         )
         self.assertEqual(self.widget.encoding_combo.currentText(), "Equal Width")
+
+
+class TestColumnFilter(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.widget = ColumnFilter()
+
+    def test_switching_columns_clears_filter_input(self):
+        self.widget.set_current_column("u1", "First")
+        self.widget.value_input.setText("stale value")
+
+        self.widget.set_current_column("u2", "Second")
+
+        self.assertEqual(self.widget.value_input.text(), "")
 
 
 class TestMainControllerMenuState(unittest.TestCase):
@@ -119,6 +137,7 @@ class TestColumnPanelMultiSelection(unittest.TestCase):
         self.panel.set_multi_column_mode(["u1", "u2"], ["A", "B"], can_merge=True)
 
         self.assertFalse(self.panel.column_merge.isHidden())
+        self.assertTrue(self.panel.column_filter.isHidden())
         self.assertTrue(self.panel.encoder_options.isHidden())
         self.assertTrue(self.panel.delete_btn.isHidden())
         self.assertTrue(self.panel.column_merge.merge_button.isEnabled())
@@ -135,8 +154,18 @@ class TestColumnPanelMultiSelection(unittest.TestCase):
         self.panel.set_single_column_mode()
 
         self.assertTrue(self.panel.column_merge.isHidden())
+        self.assertFalse(self.panel.column_filter.isHidden())
         self.assertFalse(self.panel.encoder_options.isHidden())
         self.assertFalse(self.panel.delete_btn.isHidden())
+
+    def test_filter_widget_is_above_encoding_widget(self):
+        panel_layout = self.panel.layout()
+        filter_index = panel_layout.indexOf(self.panel.column_filter)
+        encoding_index = panel_layout.indexOf(self.panel.encoder_options)
+
+        self.assertGreaterEqual(filter_index, 0)
+        self.assertGreaterEqual(encoding_index, 0)
+        self.assertLess(filter_index, encoding_index)
 
     def test_merge_checkbox_is_above_merge_button(self):
         group_layout = self.panel.column_merge.group.layout()

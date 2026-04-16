@@ -228,3 +228,48 @@ class TestIntegration(unittest.TestCase):
         self.assertIn('Type: Binary', stats)
         self.assertIn('YES: 2', stats)
         self.assertIn('NO: 2', stats)
+
+    def test_row_filter_by_value_is_undoable_and_redoable(self):
+        df = pd.DataFrame({
+            'Status': ['keep', 'remove', 'keep', 'remove'],
+            'Value': [1, 2, 3, 4],
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        status_uuid = wrapper.get_uuid_by_name('Status')
+        manager.add_row_filter_by_value(status_uuid, 'remove')
+
+        self.assertEqual(list(manager.get_current_dataframe()['Status']), ['keep', 'keep'])
+
+        manager.undo_transformation()
+        self.assertEqual(list(manager.get_current_dataframe()['Status']), ['keep', 'remove', 'keep', 'remove'])
+
+        manager.redo_transformation()
+        self.assertEqual(list(manager.get_current_dataframe()['Status']), ['keep', 'keep'])
+
+    def test_row_filter_raises_when_value_missing(self):
+        df = pd.DataFrame({'A': [1, 2, 3]})
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        col_uuid = wrapper.get_uuid_by_name('A')
+        with self.assertRaises(ValueError):
+            manager.add_row_filter_by_value(col_uuid, 999)
+
+    def test_binary_label_update_remaps_active_row_filter(self):
+        df = pd.DataFrame({'Flag': [True, False, True, False]})
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        flag_uuid = wrapper.get_uuid_by_name('Flag')
+        manager.add_row_filter_by_value(flag_uuid, True)
+
+        manager.update_binary_labels('YES', 'NO')
+
+        out_df = manager.get_current_dataframe()
+        self.assertEqual(list(out_df['Flag']), ['NO', 'NO'])
+
+        graph = manager.build_dependency_graph()
+        script = ScriptGenerator(graph).generate_script()
+        self.assertIn("_to_binary_flag(value, 'YES', 'NO')", script)
