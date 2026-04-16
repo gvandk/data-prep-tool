@@ -18,7 +18,6 @@ class ColumnRename(QHBoxLayout):
         self.rename_input.blockSignals(True)
         self.rename_input.setText(name)
         self.rename_input.blockSignals(False)
-        self.rename_input.setFocus()
 
     def on_text_edited(self, new_text):
         if self.uuid:

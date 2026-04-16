@@ -18,7 +18,6 @@ class CellEdit(QHBoxLayout):
         self.cell_input.blockSignals(True)
         self.cell_input.setText(value)
         self.cell_input.blockSignals(False)
-        self.cell_input.setFocus()
 
     def on_cell_edited(self, new_value):
         if self.uuid:

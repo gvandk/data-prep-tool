@@ -18,7 +18,6 @@ class ColumnOrder(QHBoxLayout):
         self.reorder_input.blockSignals(True)
         self.reorder_input.setText(index)
         self.reorder_input.blockSignals(False)
-        self.reorder_input.setFocus()
 
     def on_text_edited(self, new_index):
         if self.uuid:

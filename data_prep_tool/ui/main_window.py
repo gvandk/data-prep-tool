@@ -1,6 +1,19 @@
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import QMainWindow, QHBoxLayout, QWidget, QLabel, QStackedLayout, QScrollArea
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent
+from PyQt6.QtGui import QKeySequence, QDragEnterEvent, QDropEvent, QKeyEvent
+from PyQt6.QtWidgets import (
+    QMainWindow,
+    QHBoxLayout,
+    QWidget,
+    QLabel,
+    QStackedLayout,
+    QScrollArea,
+    QApplication,
+    QLineEdit,
+    QTextEdit,
+    QPlainTextEdit,
+    QAbstractSpinBox,
+    QComboBox,
+)
 from .table_view import TableView
 from .layouts.column_options import ColumnPanel
 from .layouts.row_options import RowPanel
@@ -36,8 +49,8 @@ class MainWindow(QMainWindow):
         self.left_scroll_area.setWidgetResizable(True)
         self.left_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.left_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.left_scroll_area.setMinimumWidth(360)
-        self.left_scroll_area.setMaximumWidth(420)
+        self.left_scroll_area.setMinimumWidth(390)
+        self.left_scroll_area.setMaximumWidth(460)
         self.left_scroll_area.setWidget(self.left_panel)
         
         # Intro panel
@@ -92,9 +105,59 @@ class MainWindow(QMainWindow):
         self.action_undo.setShortcut(QKeySequence.StandardKey.Undo)
         self.action_redo.setShortcut(QKeySequence.StandardKey.Redo)
         self.action_delete.setShortcut(QKeySequence.StandardKey.Delete)
+        self.action_undo.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.action_redo.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.action_delete.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
         
         self.set_panel("intro")
         self.show_table_placeholder(True)
+
+    def _is_text_input_widget(self, widget):
+        if widget is None:
+            return False
+        if isinstance(widget, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)):
+            return True
+        if isinstance(widget, QComboBox):
+            return widget.isEditable()
+        return False
+
+    def eventFilter(self, watched, event):
+        if event.type() != QEvent.Type.KeyPress:
+            return super().eventFilter(watched, event)
+
+        if not self.isActiveWindow():
+            return super().eventFilter(watched, event)
+
+        key_event = event if isinstance(event, QKeyEvent) else None
+        if key_event is None:
+            return super().eventFilter(watched, event)
+
+        modifiers = key_event.modifiers()
+        key = key_event.key()
+        focused = QApplication.focusWidget()
+
+        is_ctrl = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        is_shift = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        # Keep transformation history shortcuts working even when line edits are focused.
+        if is_ctrl and not is_shift and key == Qt.Key.Key_Z and self.action_undo.isEnabled():
+            self.action_undo.trigger()
+            return True
+
+        if ((is_ctrl and not is_shift and key == Qt.Key.Key_Y) or (is_ctrl and is_shift and key == Qt.Key.Key_Z)) and self.action_redo.isEnabled():
+            self.action_redo.trigger()
+            return True
+
+        # Preserve normal text editing for Delete inside text inputs.
+        if key == Qt.Key.Key_Delete and not self._is_text_input_widget(focused):
+            self.action_delete.trigger()
+            return True
+
+        return super().eventFilter(watched, event)
     
     def set_panel(self, panel_name: str):
         """Helper to switch panels by name."""

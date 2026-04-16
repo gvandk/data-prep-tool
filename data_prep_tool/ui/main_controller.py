@@ -465,6 +465,7 @@ with error handling for generation and execution issues."""
             )
 
         self.main_window.column_options.set_current_uuid(uuid)
+        self.main_window.table_view.setFocus()
 
     def on_binning_change(self, uuid, strategy, n_bins, cutoffs):
         """Handle changes in binning strategy for a column, including validation of parameters and ensuring the column is numeric 
@@ -547,6 +548,7 @@ with error handling for invalid operations."""
 
         self.main_window.set_panel("row")
         self.main_window.row_options.set_row(logical_index)
+        self.main_window.table_view.setFocus()
 
     def on_cell_clicked(self, index):
         if not index.isValid(): return
@@ -566,6 +568,7 @@ with error handling for invalid operations."""
         self.main_window.cell_options.cell_edit.uuid = uuid
         self.main_window.cell_options.column_rename.set_current_column(uuid, col_name)
         self.main_window.cell_options.column_rename.uuid = uuid
+        self.main_window.table_view.setFocus()
 
     def on_column_rename(self, uuid, new_name):
         all_uuids = self.manager.df_wrapper.get_all_uuids()
