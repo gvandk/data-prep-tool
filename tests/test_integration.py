@@ -203,9 +203,9 @@ class TestIntegration(unittest.TestCase):
 
         self.assertIn('Type: Categorical', stats)
         self.assertIn('Top Values (count):', stats)
-        self.assertIn('- A: 2', stats)
-        self.assertIn('- B: 1', stats)
-        self.assertIn('- C: 1', stats)
+        self.assertIn('     A: 2', stats)
+        self.assertIn('     B: 1', stats)
+        self.assertIn('     C: 1', stats)
 
     def test_calculate_stats_categorical_top_counts_all_missing(self):
         """Categorical top-counts should handle all-null columns without crashing."""
