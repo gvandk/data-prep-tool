@@ -248,7 +248,11 @@ class MainController:
     def on_binary_values_changed(self, true_val, false_val):
         try:
             self.manager.update_binary_labels(true_val, false_val)
+            self.main_window.general_options.set_binary_labels_error(False)
             self.refresh_view()
+        except ValueError:
+            self.main_window.general_options.set_binary_labels_error(True)
+            QApplication.beep()
         except Exception:
             QApplication.beep()
 

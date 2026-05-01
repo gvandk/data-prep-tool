@@ -142,6 +142,17 @@ class TestMainControllerGeneralInfoStats(unittest.TestCase):
         self.assertIn('"D": binary', dtype_text)
         self.assertNotIn('"D": object', dtype_text)
 
+    def test_binary_labels_cannot_be_identical(self):
+        self.controller.on_binary_values_changed("Same", "Same")
+
+        self.assertEqual(self.controller.manager.binary_true, "True")
+        self.assertEqual(self.controller.manager.binary_false, "False")
+        self.assertNotEqual(self.window.general_options.true_input.styleSheet(), "")
+        self.assertEqual(
+            self.window.general_options.true_input.styleSheet(),
+            self.window.general_options.false_input.styleSheet(),
+        )
+
 
 class TestMainControllerRowDeleteSelection(unittest.TestCase):
     @classmethod

@@ -10,6 +10,7 @@ class GeneralPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._binary_label_error_style = "border: 1px solid #d93025;"
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -97,6 +98,12 @@ class GeneralPanel(QWidget):
     def on_values_changed(self):
         """Handle changes in binary value labels and emit signal."""
         self.binary_values_changed.emit(self.true_input.text(), self.false_input.text())
+
+    def set_binary_labels_error(self, has_error: bool):
+        """Highlight binary label inputs when the labels are invalid."""
+        style = self._binary_label_error_style if has_error else ""
+        self.true_input.setStyleSheet(style)
+        self.false_input.setStyleSheet(style)
 
     def on_view_settings_changed(self):
         """Handle changes in view settings and emit signal."""

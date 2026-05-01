@@ -1,7 +1,10 @@
 import unittest
+import tempfile
+from pathlib import Path
 import pandas as pd
 
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
+from data_prep_tool.core.export_service import export_csv_with_script, generate_script_from_manager
 from data_prep_tool.core.transformation_manager import TransformationManager
 from data_prep_tool.core.script_generator import ScriptGenerator
 
@@ -817,6 +820,40 @@ class TestComplexCombinations(unittest.TestCase):
         self.assertIn('0', child_vals)
         self.assertNotIn(True, child_vals)
         self.assertNotIn(False, child_vals)
+
+    def test_binary_label_update_rejects_identical_labels(self):
+        """Binary true/false labels must not be identical."""
+        df = pd.DataFrame({'Flag': [True, False]})
+        _, mgr = make_manager(df)
+
+        with self.assertRaisesRegex(ValueError, "must be different"):
+            mgr.update_binary_labels('same', 'same')
+
+    def test_export_script_relabels_untransformed_binary_columns(self):
+        """Scripts exported after label changes must relabel untouched binary columns too."""
+        df = pd.DataFrame({
+            'Flag': [True, False, True],
+            'Value': [10, 20, 30],
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        manager.update_binary_labels('YES', 'NO')
+        script = generate_script_from_manager(manager)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / 'input.csv'
+            output_path = Path(tmp_dir) / 'output.csv'
+            df.to_csv(input_path, index=False)
+
+            success, error_text = export_csv_with_script(script, str(input_path), str(output_path))
+
+            self.assertTrue(success, error_text)
+            raw_output = output_path.read_text(encoding='utf-8')
+            self.assertIn('YES', raw_output)
+            self.assertIn('NO', raw_output)
+            self.assertNotIn('True', raw_output)
+            self.assertNotIn('False', raw_output)
 
     def test_adding_row_after_deleting_maintains_correct_row_count(self):
         """After delete + add, total rows = original rows."""

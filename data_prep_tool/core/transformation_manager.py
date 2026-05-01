@@ -131,6 +131,9 @@ class TransformationManager:
     
     def update_binary_labels(self, true_val, false_val):
         """Update binary labels for one-hot/binning columns in place using UUID-targeted relabeling."""
+        if str(true_val).strip().casefold() == str(false_val).strip().casefold():
+            raise ValueError("True and False labels must be different.")
+
         old_global_true = self.binary_true
         old_global_false = self.binary_false
 

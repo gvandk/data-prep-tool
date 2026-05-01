@@ -25,7 +25,12 @@ def load_manager_from_csv(file_path: str, true_label: str, false_label: str) -> 
 def generate_script_from_manager(manager: TransformationManager) -> str:
     """Generate executable transformation script from current manager state."""
     graph = manager.build_dependency_graph()
-    generator = ScriptGenerator(graph, history=manager.history)
+    generator = ScriptGenerator(
+        graph,
+        history=manager.history,
+        binary_true=manager.binary_true,
+        binary_false=manager.binary_false,
+    )
     visual_order = manager.df_wrapper.get_all_uuids()
     return generator.generate_script(final_col_uuids=visual_order)
 

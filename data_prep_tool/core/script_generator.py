@@ -3,9 +3,11 @@ import pandas as pd
 from .dependency_graph import DependencyGraph, GraphNode
 
 class ScriptGenerator:
-    def __init__(self, graph: DependencyGraph, history: list = None):
+    def __init__(self, graph: DependencyGraph, history: list = None, binary_true: str = "True", binary_false: str = "False"):
         self.graph = graph
         self.history = history or []
+        self.binary_true = binary_true
+        self.binary_false = binary_false
 
     def _s(self, value) -> str:
         return repr(str(value))
@@ -116,8 +118,11 @@ class ScriptGenerator:
 
         needs_binary_merge_helper = False
         needs_binary_flag_helper = False
+        needs_binary_label_normalization = (
+            self.binary_true != "True" or self.binary_false != "False"
+        )
         for node in sorted_steps:
-            if needs_binary_merge_helper and needs_binary_flag_helper:
+            if needs_binary_merge_helper and needs_binary_flag_helper and not needs_binary_label_normalization:
                 break
 
             if node.operation == "BINARY_MERGE":
@@ -254,6 +259,25 @@ class ScriptGenerator:
             ],
             "# Load Data",
         )
+
+        if needs_binary_label_normalization:
+            self._append_guarded_step(
+                lines,
+                "Normalize binary labels",
+                [
+                    f"for col_name in df.columns:",
+                    "    series = df[col_name]",
+                    "    if series.dtype == bool:",
+                    f"        df[col_name] = series.replace({{True: {self._s(self.binary_true)}, False: {self._s(self.binary_false)}}})",
+                    "        continue",
+                    "    if series.dtype != object:",
+                    "        continue",
+                    f"    values = {{str(value).strip().casefold() for value in series.dropna().unique()}}",
+                    f"    if values and values <= {{'true', 'false', '1', '0', {self._s(self.binary_true)}.strip().casefold(), {self._s(self.binary_false)}.strip().casefold()}}:",
+                    f"        df[col_name] = series.replace({{True: {self._s(self.binary_true)}, False: {self._s(self.binary_false)}, 'True': {self._s(self.binary_true)}, 'False': {self._s(self.binary_false)}, 'true': {self._s(self.binary_true)}, 'false': {self._s(self.binary_false)}, '1': {self._s(self.binary_true)}, '0': {self._s(self.binary_false)}, {self._s(self.binary_true)}: {self._s(self.binary_true)}, {self._s(self.binary_false)}: {self._s(self.binary_false)}}})",
+                ],
+                "# Normalize binary labels",
+            )
 
         # If no optimized steps remain, just save the loaded CSV.
         if not sorted_steps:
