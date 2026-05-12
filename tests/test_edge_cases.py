@@ -855,6 +855,32 @@ class TestComplexCombinations(unittest.TestCase):
             self.assertNotIn('True', raw_output)
             self.assertNotIn('False', raw_output)
 
+    def test_export_script_relabels_untransformed_numeric_binary_columns(self):
+        """Scripts exported after label changes must relabel untouched 0/1 columns too."""
+        df = pd.DataFrame({
+            'Flag': [1, 0, 1],
+            'Value': [10, 20, 30],
+        })
+        wrapper = DataFrameWrapper(df)
+        manager = TransformationManager(wrapper)
+
+        manager.update_binary_labels('YES', 'NO')
+        script = generate_script_from_manager(manager)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / 'input.csv'
+            output_path = Path(tmp_dir) / 'output.csv'
+            df.to_csv(input_path, index=False)
+
+            success, error_text = export_csv_with_script(script, str(input_path), str(output_path))
+
+            self.assertTrue(success, error_text)
+            raw_output = output_path.read_text(encoding='utf-8')
+            self.assertIn('YES', raw_output)
+            self.assertIn('NO', raw_output)
+            self.assertNotIn(',1\n', raw_output)
+            self.assertNotIn(',0\n', raw_output)
+
     def test_adding_row_after_deleting_maintains_correct_row_count(self):
         """After delete + add, total rows = original rows."""
         df = pd.DataFrame({'A': range(5)})

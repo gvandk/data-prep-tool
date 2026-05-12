@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 import pandas as pd
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtTest import QTest
 
 from data_prep_tool.core.dataframe_wrapper import DataFrameWrapper
 from data_prep_tool.core.transformation_manager import TransformationManager
@@ -152,6 +153,17 @@ class TestMainControllerGeneralInfoStats(unittest.TestCase):
             self.window.general_options.true_input.styleSheet(),
             self.window.general_options.false_input.styleSheet(),
         )
+
+    def test_typing_same_labels_does_not_apply_intermediate_relabel(self):
+        original_values = list(self.controller.manager.df_wrapper.df["C"])
+
+        self.window.general_options.true_input.setText("Same")
+        self.window.general_options.false_input.setText("Same")
+        QTest.qWait(350)
+
+        self.assertEqual(self.controller.manager.binary_true, "True")
+        self.assertEqual(self.controller.manager.binary_false, "False")
+        self.assertEqual(list(self.controller.manager.df_wrapper.df["C"]), original_values)
 
 
 class TestMainControllerRowDeleteSelection(unittest.TestCase):

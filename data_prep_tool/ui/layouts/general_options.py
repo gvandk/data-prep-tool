@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QLineEdit, QHBoxLayout, QPushButton, QComboBox
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QTimer
 from PyQt6.QtGui import QIntValidator
 
 class GeneralPanel(QWidget):
@@ -11,6 +11,10 @@ class GeneralPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._binary_label_error_style = "border: 1px solid #d93025;"
+        self._binary_label_emit_timer = QTimer(self)
+        self._binary_label_emit_timer.setSingleShot(True)
+        self._binary_label_emit_timer.setInterval(250)
+        self._binary_label_emit_timer.timeout.connect(self._emit_binary_values_changed)
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -96,7 +100,10 @@ class GeneralPanel(QWidget):
         self.add_col_btn.clicked.connect(self.add_col_requested.emit)
 
     def on_values_changed(self):
-        """Handle changes in binary value labels and emit signal."""
+        """Handle changes in binary value labels and emit signal after a short debounce."""
+        self._binary_label_emit_timer.start()
+
+    def _emit_binary_values_changed(self):
         self.binary_values_changed.emit(self.true_input.text(), self.false_input.text())
 
     def set_binary_labels_error(self, has_error: bool):
