@@ -60,8 +60,15 @@ class RowValueFilterTransformation(BaseTransformation):
 
         if pd.isna(self.filtered_value):
             return series.isna()
-
-        return series == self.filtered_value
+            
+        # Try exact type match first
+        exact_mask = series == self.filtered_value
+        
+        # Fallback to string representation matching to handle mixed types 
+        # (e.g., comparing pd.Interval objects with manually edited strings)
+        str_mask = series.astype(str) == str(self.filtered_value)
+        
+        return exact_mask | str_mask
 
     def apply(self, df_wrapper: DataFrameWrapper):
         self._column_name = df_wrapper.get_col_name_by_uuid(self.col_uuid)
@@ -71,7 +78,7 @@ class RowValueFilterTransformation(BaseTransformation):
         self._pre_apply_df = df_wrapper.df.copy()
         series = df_wrapper.df[self._column_name]
         drop_mask = self._build_drop_mask(series)
-
+        print(drop_mask, flush=True)
         if not drop_mask.any():
             raise ValueError(
                 f"Value '{self.filtered_value}' is not present in column '{self._column_name}'."
